@@ -1,0 +1,92 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: config-server
+  
+  # 数据库配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://rm-bp157o1t88nfl189jjo.mysql.rds.aliyuncs.com:3306/config_center?serverTimezone=Asia/Shanghai&useSSL=false
+    username: root
+    password: Gu1152505423
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: true
+        use_sql_comments: true
+  
+  # Redis配置
+#  redis:
+#    host: localhost
+#    port: 6379
+#    password:
+#    database: 0
+#    timeout: 3000ms
+#    lettuce:
+#      pool:
+#        max-active: 8
+#        max-wait: -1ms
+#        max-idle: 8
+#        min-idle: 0
+
+# JWT配置
+jwt:
+  secret: config-center-secret-key-2024
+  expiration: 86400000  # 24小时
+
+# 日志配置
+logging:
+  level:
+    com.bank.config: DEBUG
+    org.springframework.security: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# 管理端点配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# 自定义配置
+config:
+  # 推送配置
+  push:
+    websocket:
+      endpoint: /ws/config
+      allowed-origins: "*"
+  
+  # 缓存配置
+  cache:
+    config-ttl: 300  # 配置缓存时间（秒）
+    version-ttl: 600  # 版本缓存时间（秒）
+  
+  # 安全配置
+  security:
+    # 不需要认证的路径
+    permit-all:
+      - /api/auth/login
+      - /api/auth/register
+      - /api/health
+      - /api/actuator/**
+      - /ws/** 
