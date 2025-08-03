@@ -21,7 +21,7 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/applications")
-@CrossOrigin(origins = "*")
+//@CrossOrigin(origins = "*")
 public class ApplicationController {
 
     @Autowired

@@ -21,7 +21,7 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/environments")
-@CrossOrigin(origins = "*")
+//@CrossOrigin(origins = "*")
 public class EnvironmentController {
 
     @Autowired

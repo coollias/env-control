@@ -19,7 +19,7 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/client")
-@CrossOrigin(origins = "*")
+//@CrossOrigin(origins = "*")
 public class ConfigClientController {
 
     @Autowired

@@ -17,7 +17,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/health")
-@CrossOrigin(origins = "*")
+//@CrossOrigin(origins = "*")
 public class HealthController {
 
     /**

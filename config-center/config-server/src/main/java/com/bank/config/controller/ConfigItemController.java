@@ -21,7 +21,7 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/config-items")
-@CrossOrigin(origins = "*")
+//@CrossOrigin(origins = "*")
 public class ConfigItemController {
 
     @Autowired
@@ -124,6 +124,7 @@ public class ConfigItemController {
         try {
             Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "configKey"));
             Page<ConfigItem> configItems = configItemService.findConfigItems(appId, envId, keyword, status, pageable);
+            System.out.println(configItems);
             return ApiResponse.success(configItems);
         } catch (Exception e) {
             return ApiResponse.error(e.getMessage());
