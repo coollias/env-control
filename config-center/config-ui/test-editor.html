@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monaco编辑器测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .editor-container {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            height: 400px;
+            margin: 20px 0;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #f0f0f0;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #e0e0e0;
+        }
+        .output {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Monaco编辑器测试</h1>
+    
+    <div class="controls">
+        <label>语言: </label>
+        <select id="language">
+            <option value="yaml">YAML</option>
+            <option value="json">JSON</option>
+            <option value="properties">Properties</option>
+        </select>
+        
+        <button onclick="loadTemplate()">加载模板</button>
+        <button onclick="formatContent()">格式化</button>
+        <button onclick="validateContent()">验证格式</button>
+        <button onclick="getContent()">获取内容</button>
+    </div>
+    
+    <div id="editor" class="editor-container"></div>
+    
+    <div id="output" class="output"></div>
+
+    <script src="https://unpkg.com/monaco-editor@0.44.0/min/vs/loader.js"></script>
+    <script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <script>
+        let editor;
+        
+        require.config({ paths: { vs: 'https://unpkg.com/monaco-editor@0.44.0/min/vs' } });
+        require(['vs/editor/editor.main'], function () {
+            editor = monaco.editor.create(document.getElementById('editor'), {
+                value: '# 请输入YAML配置\n',
+                language: 'yaml',
+                theme: 'vs',
+                fontSize: 14,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                lineNumbers: 'on',
+                folding: true,
+                automaticLayout: true
+            });
+        });
+        
+        function loadTemplate() {
+            const language = document.getElementById('language').value;
+            const templates = {
+                yaml: `# 应用配置模板
+database:
+  url: jdbc:mysql://localhost:3306/myapp
+  username: root
+  password: password
+  pool:
+    maxConnections: 20
+    minConnections: 5
+    timeout: 30000
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  database: 0
+  timeout: 2000
+
+logging:
+  level: INFO
+  file: /var/log/app.log
+  maxSize: 100MB
+  retention: 30d
+
+security:
+  jwt:
+    secret: your-secret-key
+    expiration: 86400
+  cors:
+    allowedOrigins:
+      - http://localhost:3000
+      - https://yourdomain.com
+    allowedMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+
+features:
+  enableCache: true
+  enableMetrics: true
+  enableHealthCheck: true`,
+                
+                json: `{
+  "database": {
+    "url": "jdbc:mysql://localhost:3306/myapp",
+    "username": "root",
+    "password": "password",
+    "pool": {
+      "maxConnections": 20,
+      "minConnections": 5,
+      "timeout": 30000
+    }
+  },
+  "redis": {
+    "host": "localhost",
+    "port": 6379,
+    "password": "",
+    "database": 0,
+    "timeout": 2000
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "/var/log/app.log",
+    "maxSize": "100MB",
+    "retention": "30d"
+  },
+  "security": {
+    "jwt": {
+      "secret": "your-secret-key",
+      "expiration": 86400
+    },
+    "cors": {
+      "allowedOrigins": ["http://localhost:3000", "https://yourdomain.com"],
+      "allowedMethods": ["GET", "POST", "PUT", "DELETE"]
+    }
+  },
+  "features": {
+    "enableCache": true,
+    "enableMetrics": true,
+    "enableHealthCheck": true
+  }
+}`,
+                
+                properties: `# 应用配置模板
+# Database Configuration
+database.url=jdbc:mysql://localhost:3306/myapp
+database.username=root
+database.password=password
+database.pool.maxConnections=20
+database.pool.minConnections=5
+database.pool.timeout=30000
+
+# Redis Configuration
+redis.host=localhost
+redis.port=6379
+redis.password=
+redis.database=0
+redis.timeout=2000
+
+# Logging Configuration
+logging.level=INFO
+logging.file=/var/log/app.log
+logging.maxSize=100MB
+logging.retention=30d
+
+# Security Configuration
+security.jwt.secret=your-secret-key
+security.jwt.expiration=86400
+security.cors.allowedOrigins=http://localhost:3000,https://yourdomain.com
+security.cors.allowedMethods=GET,POST,PUT,DELETE
+
+# Feature Flags
+features.enableCache=true
+features.enableMetrics=true
+features.enableHealthCheck=true`
+            };
+            
+            editor.setValue(templates[language] || templates.yaml);
+        }
+        
+        function formatContent() {
+            const language = document.getElementById('language').value;
+            try {
+                if (language === 'json') {
+                    const content = editor.getValue();
+                    const parsed = JSON.parse(content);
+                    editor.setValue(JSON.stringify(parsed, null, 2));
+                    showOutput('JSON格式化成功');
+                } else if (language === 'yaml') {
+                    const content = editor.getValue();
+                    const parsed = jsyaml.load(content);
+                    editor.setValue(jsyaml.dump(parsed, {
+                        indent: 2,
+                        lineWidth: 80,
+                        noRefs: true
+                    }));
+                    showOutput('YAML格式化成功');
+                } else {
+                    showOutput('当前格式无需格式化');
+                }
+            } catch (error) {
+                showOutput('格式化失败: ' + error.message);
+            }
+        }
+        
+        function validateContent() {
+            const language = document.getElementById('language').value;
+            try {
+                if (language === 'json') {
+                    const content = editor.getValue();
+                    JSON.parse(content);
+                    showOutput('JSON格式正确');
+                } else if (language === 'yaml') {
+                    const content = editor.getValue();
+                    jsyaml.load(content);
+                    showOutput('YAML格式正确');
+                } else {
+                    showOutput('格式验证通过');
+                }
+            } catch (error) {
+                showOutput('格式验证失败: ' + error.message);
+            }
+        }
+        
+        function getContent() {
+            const content = editor.getValue();
+            showOutput('编辑器内容:\n' + content);
+        }
+        
+        function showOutput(message) {
+            document.getElementById('output').textContent = message;
+        }
+        
+        // 监听语言选择变化
+        document.getElementById('language').addEventListener('change', function() {
+            const language = this.value;
+            const model = editor.getModel();
+            monaco.editor.setModelLanguage(model, language);
+        });
+    </script>
+</body>
+</html> 

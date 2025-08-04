@@ -7,6 +7,10 @@ var index = require('../../../hooks/use-aria/index.js');
 var types = require('../../../utils/types.js');
 
 const scrollbarProps = runtime.buildProps({
+  distance: {
+    type: Number,
+    default: 0
+  },
   height: {
     type: [String, Number],
     default: ""

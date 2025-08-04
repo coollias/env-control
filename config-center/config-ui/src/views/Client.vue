@@ -16,24 +16,24 @@
             </template>
             
             <el-form :model="requestForm" label-width="100px">
-              <el-form-item label="应用ID">
-                <el-select v-model="requestForm.appId" placeholder="选择应用" style="width: 100%">
+              <el-form-item label="应用">
+                <el-select v-model="requestForm.appCode" placeholder="选择应用" style="width: 100%">
                   <el-option
                     v-for="app in applications"
                     :key="app.id"
                     :label="`${app.appName} (${app.appCode})`"
-                    :value="app.id"
+                    :value="app.appCode"
                   />
                 </el-select>
               </el-form-item>
               
-              <el-form-item label="环境ID">
-                <el-select v-model="requestForm.envId" placeholder="选择环境" style="width: 100%">
+              <el-form-item label="环境">
+                <el-select v-model="requestForm.envCode" placeholder="选择环境" style="width: 100%">
                   <el-option
                     v-for="env in environments"
                     :key="env.id"
                     :label="`${env.envName} (${env.envCode})`"
-                    :value="env.id"
+                    :value="env.envCode"
                   />
                 </el-select>
               </el-form-item>
@@ -85,10 +85,10 @@
         
         <el-descriptions :column="1" border>
           <el-descriptions-item label="获取所有配置">
-            <code>GET /api/client/config/{appId}/{envId}</code>
+            <code>GET /api/client/configs/{appCode}/{envCode}</code>
           </el-descriptions-item>
           <el-descriptions-item label="获取单个配置">
-            <code>GET /api/client/config/{appId}/{envId}/{configKey}</code>
+            <code>GET /api/client/config/{appCode}/{envCode}/{configKey}</code>
           </el-descriptions-item>
           <el-descriptions-item label="请求头">
             <code>Content-Type: application/json</code>
@@ -135,8 +135,8 @@ const applications = ref([])
 const environments = ref([])
 
 const requestForm = reactive({
-  appId: '',
-  envId: '',
+  appCode: '',
+  envCode: '',
   configKey: ''
 })
 
@@ -159,14 +159,14 @@ const loadEnvironments = async () => {
 }
 
 const testGetAllConfigs = async () => {
-  if (!requestForm.appId || !requestForm.envId) {
+  if (!requestForm.appCode || !requestForm.envCode) {
     ElMessage.warning('请选择应用和环境')
     return
   }
   
   loading.value = true
   try {
-    const result = await clientApi.getConfig(requestForm.appId, requestForm.envId)
+    const result = await clientApi.getConfig(requestForm.appCode, requestForm.envCode)
     response.value = {
       success: true,
       data: result.data,
@@ -186,14 +186,14 @@ const testGetAllConfigs = async () => {
 }
 
 const testGetConfigItem = async () => {
-  if (!requestForm.appId || !requestForm.envId || !requestForm.configKey) {
+  if (!requestForm.appCode || !requestForm.envCode || !requestForm.configKey) {
     ElMessage.warning('请填写完整的请求参数')
     return
   }
   
   loading.value = true
   try {
-    const result = await clientApi.getConfigItem(requestForm.appId, requestForm.envId, requestForm.configKey)
+    const result = await clientApi.getConfigItem(requestForm.appCode, requestForm.envCode, requestForm.configKey)
     response.value = {
       success: true,
       data: result.data,

@@ -46,6 +46,27 @@ public interface ConfigItemRepository extends JpaRepository<ConfigItem, Long> {
     Page<ConfigItem> findByKeywordAndAppIdAndEnvIdAndStatus(@Param("keyword") String keyword, @Param("appId") Long appId, @Param("envId") Long envId, @Param("status") Integer status, Pageable pageable);
 
     /**
+     * 根据关键字和状态全局搜索
+     */
+    @Query("SELECT c FROM ConfigItem c WHERE c.status = :status AND c.configKey LIKE %:keyword%")
+    Page<ConfigItem> findByKeywordAndStatus(@Param("keyword") String keyword, @Param("status") Integer status, Pageable pageable);
+
+    /**
+     * 根据状态查询所有配置项
+     */
+    Page<ConfigItem> findByStatusOrderByConfigKey(Integer status, Pageable pageable);
+
+    /**
+     * 根据环境ID和状态查询配置项
+     */
+    Page<ConfigItem> findByEnvIdAndStatusOrderByConfigKey(Long envId, Integer status, Pageable pageable);
+
+    /**
+     * 根据应用ID和状态查询配置项
+     */
+    Page<ConfigItem> findByAppIdAndStatusOrderByConfigKey(Long appId, Integer status, Pageable pageable);
+
+    /**
      * 检查配置键是否存在
      */
     boolean existsByAppIdAndEnvIdAndConfigKey(Long appId, Long envId, String configKey);
@@ -69,4 +90,9 @@ public interface ConfigItemRepository extends JpaRepository<ConfigItem, Long> {
      * 删除环境下的所有配置项
      */
     void deleteByEnvId(Long envId);
+
+    /**
+     * 根据状态统计配置项数量
+     */
+    long countByStatus(Integer status);
 } 

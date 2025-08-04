@@ -54,4 +54,19 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
      * 根据负责人查找应用
      */
     List<Application> findByOwnerAndStatus(String owner, Integer status);
+
+    /**
+     * 根据状态统计应用数量
+     */
+    long countByStatus(Integer status);
+
+    /**
+     * 根据ID列表和状态查找应用
+     */
+    List<Application> findByIdInAndStatusOrderByCreatedAtDesc(List<Long> ids, Integer status);
+
+    /**
+     * 根据创建者和状态查找应用
+     */
+    List<Application> findByCreatedByAndStatusOrderByCreatedAtDesc(Long createdBy, Integer status);
 } 

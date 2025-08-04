@@ -73,4 +73,14 @@ public interface ConfigItemService {
      * 获取配置项数量
      */
     long countByAppIdAndEnvId(Long appId, Long envId);
+
+    /**
+     * 统计所有配置项数量
+     */
+    long countAll();
+
+    /**
+     * 根据状态统计配置项数量
+     */
+    long countByStatus(Integer status);
 } 

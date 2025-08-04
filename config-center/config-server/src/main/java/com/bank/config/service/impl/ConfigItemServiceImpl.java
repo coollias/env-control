@@ -110,9 +110,27 @@ public class ConfigItemServiceImpl implements ConfigItemService {
     @Transactional(readOnly = true)
     public Page<ConfigItem> findConfigItems(Long appId, Long envId, String keyword, Integer status, Pageable pageable) {
         if (StringUtils.hasText(keyword)) {
+            // 有关键字时，需要指定appId和envId
+            if (appId == null || envId == null) {
+                // 如果appId或envId为null，使用全局搜索
+                return configItemRepository.findByKeywordAndStatus(keyword, status, pageable);
+            }
             return configItemRepository.findByKeywordAndAppIdAndEnvIdAndStatus(keyword, appId, envId, status, pageable);
         } else {
-            return configItemRepository.findByAppIdAndEnvIdAndStatusOrderByConfigKey(appId, envId, status, pageable);
+            // 没有关键字时，根据appId和envId是否为null来决定查询方式
+            if (appId == null && envId == null) {
+                // 查询所有配置项
+                return configItemRepository.findByStatusOrderByConfigKey(status, pageable);
+            } else if (appId == null) {
+                // 只按环境查询
+                return configItemRepository.findByEnvIdAndStatusOrderByConfigKey(envId, status, pageable);
+            } else if (envId == null) {
+                // 只按应用查询
+                return configItemRepository.findByAppIdAndStatusOrderByConfigKey(appId, status, pageable);
+            } else {
+                // 按应用和环境查询
+                return configItemRepository.findByAppIdAndEnvIdAndStatusOrderByConfigKey(appId, envId, status, pageable);
+            }
         }
     }
 
@@ -155,6 +173,18 @@ public class ConfigItemServiceImpl implements ConfigItemService {
     @Transactional(readOnly = true)
     public long countByAppIdAndEnvId(Long appId, Long envId) {
         return configItemRepository.countByAppIdAndStatus(appId, 1);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countAll() {
+        return configItemRepository.count();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countByStatus(Integer status) {
+        return configItemRepository.countByStatus(status);
     }
 
     private boolean existsByAppIdAndEnvIdAndConfigKey(Long appId, Long envId, String configKey) {

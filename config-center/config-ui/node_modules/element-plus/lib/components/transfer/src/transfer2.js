@@ -59,7 +59,7 @@ const _sfc_main = /* @__PURE__ */ vue.defineComponent({
     vue.watch(() => props.modelValue, () => {
       var _a;
       if (props.validateEvent) {
-        (_a = formItem == null ? void 0 : formItem.validate) == null ? void 0 : _a.call(formItem, "change").catch((err) => error.debugWarn(err));
+        (_a = formItem == null ? void 0 : formItem.validate) == null ? void 0 : _a.call(formItem, "change").catch((err) => error.debugWarn());
       }
     });
     const optionRender = vue.computed(() => (option) => {

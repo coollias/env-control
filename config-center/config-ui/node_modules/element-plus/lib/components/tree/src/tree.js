@@ -11,6 +11,7 @@ var useNodeExpandEventBroadcast = require('./model/useNodeExpandEventBroadcast.j
 var useDragNode = require('./model/useDragNode.js');
 var useKeydown = require('./model/useKeydown.js');
 var tokens = require('./tokens.js');
+var lodashUnified = require('lodash-unified');
 var pluginVue_exportHelper = require('../../../_virtual/plugin-vue_export-helper.js');
 var runtime = require('../../../utils/vue/props/runtime.js');
 var icon = require('../../../utils/vue/icon.js');
@@ -141,7 +142,9 @@ const _sfc_main = vue.defineComponent({
     vue.watch(() => props.currentNodeKey, (newVal) => {
       store.value.setCurrentNodeKey(newVal != null ? newVal : null);
     });
-    vue.watch(() => props.defaultCheckedKeys, (newVal) => {
+    vue.watch(() => props.defaultCheckedKeys, (newVal, oldVal) => {
+      if (lodashUnified.isEqual(newVal, oldVal))
+        return;
       store.value.setDefaultCheckedKey(newVal != null ? newVal : []);
     });
     vue.watch(() => props.defaultExpandedKeys, (newVal) => {

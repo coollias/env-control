@@ -4,7 +4,6 @@ Object.defineProperty(exports, '__esModule', { value: true });
 
 var vue = require('vue');
 var core = require('@vueuse/core');
-var types = require('../../utils/types.js');
 var aria = require('../../utils/dom/aria.js');
 var shared = require('@vue/shared');
 
@@ -54,15 +53,6 @@ function useFocusController(target, {
   core.useEventListener(wrapperRef, "focus", handleFocus, true);
   core.useEventListener(wrapperRef, "blur", handleBlur, true);
   core.useEventListener(wrapperRef, "click", handleClick, true);
-  if (process.env.NODE_ENV === "test") {
-    vue.onMounted(() => {
-      const targetEl = types.isElement(target.value) ? target.value : document.querySelector("input,textarea");
-      if (targetEl) {
-        core.useEventListener(targetEl, "focus", handleFocus, true);
-        core.useEventListener(targetEl, "blur", handleBlur, true);
-      }
-    });
-  }
   return {
     isFocused,
     wrapperRef,

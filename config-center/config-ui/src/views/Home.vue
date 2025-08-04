@@ -1,5 +1,24 @@
 <template>
   <div class="home">
+    <!-- 用户信息栏 -->
+    <el-row :gutter="20" style="margin-bottom: 20px;">
+      <el-col :span="24">
+        <el-card>
+          <div class="user-info">
+            <div class="user-avatar">
+              <el-avatar :size="50" icon="el-icon-user" />
+            </div>
+            <div class="user-details">
+              <h3>{{ userInfo.realName || userInfo.username }}</h3>
+              <p>{{ userInfo.email }}</p>
+            </div>
+            <div class="user-actions">
+              <el-button type="text" @click="logout">退出登录</el-button>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
     <el-row :gutter="20">
       <el-col :span="24">
         <el-card>
@@ -119,9 +138,14 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Grid, Setting, Document, Connection, Plus, View } from '@element-plus/icons-vue'
 import { healthApi } from '../api'
 
+const router = useRouter()
+
+// 用户信息
+const userInfo = ref({})
 const stats = ref({
   applications: 0,
   environments: 0,
@@ -132,6 +156,17 @@ const stats = ref({
 const backendStatus = ref(false)
 const dbStatus = ref(false)
 const redisStatus = ref(false)
+
+const loadStats = async () => {
+  try {
+    const response = await healthApi.getStats()
+    if (response.data) {
+      stats.value = response.data
+    }
+  } catch (error) {
+    console.error('获取统计数据失败:', error)
+  }
+}
 
 const checkSystemStatus = async () => {
   try {
@@ -147,8 +182,21 @@ const checkSystemStatus = async () => {
   }
 }
 
+const logout = () => {
+  localStorage.removeItem('token')
+  localStorage.removeItem('userInfo')
+  router.push('/login')
+}
+
 onMounted(() => {
+  // 获取用户信息
+  const userInfoStr = localStorage.getItem('userInfo')
+  if (userInfoStr) {
+    userInfo.value = JSON.parse(userInfoStr)
+  }
+  
   checkSystemStatus()
+  loadStats()
 })
 </script>
 
@@ -187,5 +235,30 @@ onMounted(() => {
   font-size: 14px;
   color: #909399;
   margin-top: 5px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.user-avatar {
+  margin-right: 15px;
+}
+
+.user-details h3 {
+  margin: 0 0 5px 0;
+  color: #303133;
+}
+
+.user-details p {
+  margin: 0;
+  color: #909399;
+  font-size: 14px;
+}
+
+.user-actions {
+  margin-left: auto;
 }
 </style> 

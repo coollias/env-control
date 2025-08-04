@@ -255,6 +255,7 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
           "wrap-style": _ctx.scrollbarStyle,
           always: _ctx.scrollbarAlwaysOn,
           tabindex: _ctx.scrollbarTabindex,
+          native: _ctx.nativeScrollbar,
           onScroll: ($event) => _ctx.$emit("scroll", $event)
         }, {
           default: vue.withCtx(() => [
@@ -326,7 +327,7 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
             ], 2)) : vue.createCommentVNode("v-if", true)
           ]),
           _: 3
-        }, 8, ["view-style", "wrap-style", "always", "tabindex", "onScroll"])
+        }, 8, ["view-style", "wrap-style", "always", "tabindex", "native", "onScroll"])
       ], 2),
       _ctx.showSummary && _ctx.tableLayout === "fixed" ? vue.withDirectives((vue.openBlock(), vue.createElementBlock("div", {
         key: 1,

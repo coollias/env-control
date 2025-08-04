@@ -1,6 +1,12 @@
 <template>
   <div id="app">
-    <el-container style="height: 100vh;">
+    <!-- 登录和注册页面不显示导航栏 -->
+    <div v-if="isAuthPage" style="height: 100vh;">
+      <router-view />
+    </div>
+    
+    <!-- 其他页面显示完整布局 -->
+    <el-container v-else style="height: 100vh;">
       <el-header style="background-color: #409EFF; color: white; display: flex; align-items: center;">
         <h2 style="margin: 0;">配置中心管理系统</h2>
       </el-header>
@@ -27,10 +33,18 @@
               <el-icon><Document /></el-icon>
               <span>配置管理</span>
             </el-menu-item>
-            <el-menu-item index="/client">
-              <el-icon><Connection /></el-icon>
-              <span>客户端API</span>
-            </el-menu-item>
+                                <el-menu-item index="/client">
+                      <el-icon><Connection /></el-icon>
+                      <span>客户端API</span>
+                    </el-menu-item>
+                    <el-menu-item index="/permissions">
+                      <el-icon><Lock /></el-icon>
+                      <span>应用权限</span>
+                    </el-menu-item>
+                    <el-menu-item index="/system-permissions">
+                      <el-icon><Setting /></el-icon>
+                      <span>系统权限</span>
+                    </el-menu-item>
           </el-menu>
         </el-aside>
         
@@ -43,7 +57,16 @@
 </template>
 
 <script setup>
-import { House, Grid, Setting, Document, Connection } from '@element-plus/icons-vue'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import { House, Grid, Setting, Document, Connection, Lock } from '@element-plus/icons-vue'
+
+const route = useRoute()
+
+// 判断当前页面是否是认证页面（登录或注册）
+const isAuthPage = computed(() => {
+  return route.path === '/login' || route.path === '/register'
+})
 </script>
 
 <style>

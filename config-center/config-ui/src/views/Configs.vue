@@ -4,10 +4,20 @@
       <template #header>
         <div class="card-header">
           <span>配置管理</span>
-          <el-button type="primary" @click="showCreateDialog = true">
-            <el-icon><Plus /></el-icon>
-            创建配置
-          </el-button>
+          <div class="header-buttons">
+            <el-button type="warning" @click="showEditorDialog = true">
+              <el-icon><Edit /></el-icon>
+              编写配置
+            </el-button>
+            <el-button type="success" @click="showUploadDialog = true">
+              <el-icon><Upload /></el-icon>
+              导入配置
+            </el-button>
+            <el-button type="primary" @click="showCreateDialog = true">
+              <el-icon><Plus /></el-icon>
+              创建配置
+            </el-button>
+          </div>
         </div>
       </template>
 
@@ -166,13 +176,20 @@
         </el-form-item>
         
         <el-form-item label="配置值" prop="configValue">
-          <div style="height: 300px; border: 1px solid #dcdfe6; border-radius: 4px;">
-            <MonacoEditor
-              v-model="form.configValue"
-              :language="getMonacoLanguage(form.configType)"
-              :options="monacoOptions"
-            />
-          </div>
+          <MonacoEditor
+            v-if="showCreateDialog"
+            v-model="form.configValue"
+            :language="getMonacoLanguage(form.configType)"
+            :options="monacoOptions"
+          />
+          <!-- 备用方案：如果MonacoEditor有问题，可以使用这个textarea -->
+          <el-input
+            v-else
+            v-model="form.configValue"
+            type="textarea"
+            :rows="10"
+            placeholder="请输入配置值"
+          />
         </el-form-item>
         
         <el-row :gutter="20">
@@ -232,15 +249,167 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 文件上传对话框 -->
+    <el-dialog
+      v-model="showUploadDialog"
+      title="导入配置文件"
+      width="600px"
+    >
+      <el-form
+        ref="uploadFormRef"
+        :model="uploadForm"
+        :rules="uploadRules"
+        label-width="100px"
+      >
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="应用" prop="appId">
+              <el-select v-model="uploadForm.appId" placeholder="选择应用" style="width: 100%">
+                <el-option
+                  v-for="app in applications"
+                  :key="app.id"
+                  :label="app.appName"
+                  :value="app.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="环境" prop="envId">
+              <el-select v-model="uploadForm.envId" placeholder="选择环境" style="width: 100%">
+                <el-option
+                  v-for="env in environments"
+                  :key="env.id"
+                  :label="env.envName"
+                  :value="env.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        
+        <el-form-item label="配置文件" prop="file">
+          <el-upload
+            ref="uploadRef"
+            :auto-upload="false"
+            :on-change="handleFileChange"
+            :before-upload="beforeUpload"
+            :file-list="fileList"
+            accept=".json,.yaml,.yml,.xml,.properties"
+            drag
+          >
+            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+            <div class="el-upload__text">
+              将文件拖到此处，或<em>点击上传</em>
+            </div>
+            <template #tip>
+              <div class="el-upload__tip">
+                支持的文件格式：JSON、YAML、XML、Properties
+              </div>
+            </template>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showUploadDialog = false">取消</el-button>
+          <el-button type="primary" @click="handleUpload" :loading="uploading">
+            开始导入
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- 配置编辑器对话框 -->
+    <el-dialog
+      v-model="showEditorDialog"
+      title="编写配置文件"
+      width="900px"
+    >
+      <el-form
+        ref="editorFormRef"
+        :model="editorForm"
+        :rules="editorRules"
+        label-width="100px"
+      >
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="应用" prop="appId">
+              <el-select v-model="editorForm.appId" placeholder="选择应用" style="width: 100%">
+                <el-option
+                  v-for="app in applications"
+                  :key="app.id"
+                  :label="app.appName"
+                  :value="app.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="环境" prop="envId">
+              <el-select v-model="editorForm.envId" placeholder="选择环境" style="width: 100%">
+                <el-option
+                  v-for="env in environments"
+                  :key="env.id"
+                  :label="env.envName"
+                  :value="env.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        
+        <el-form-item label="配置格式" prop="configType">
+          <el-radio-group v-model="editorForm.configType" @change="handleConfigTypeChange">
+            <el-radio label="yaml">YAML</el-radio>
+            <el-radio label="json">JSON</el-radio>
+            <el-radio label="properties">Properties</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        
+        <el-form-item label="配置内容" prop="content">
+          <MonacoEditor
+            v-if="showEditorDialog"
+            v-model="editorForm.content"
+            :language="getEditorLanguage(editorForm.configType)"
+            :options="monacoOptions"
+          />
+          <!-- 备用方案：如果MonacoEditor有问题，可以使用这个textarea -->
+          <el-input
+            v-else
+            v-model="editorForm.content"
+            type="textarea"
+            :rows="15"
+            placeholder="请输入配置内容"
+          />
+        </el-form-item>
+        
+        <el-form-item>
+          <el-button @click="loadTemplate" type="info">加载模板</el-button>
+          <el-button @click="formatContent" type="warning">格式化</el-button>
+          <el-button @click="validateContent" type="success">验证格式</el-button>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showEditorDialog = false">取消</el-button>
+          <el-button type="primary" @click="handleEditorSubmit" :loading="editorLoading">
+            保存配置
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search } from '@element-plus/icons-vue'
+import { Plus, Search, Upload, UploadFilled, Edit } from '@element-plus/icons-vue'
 import { configApi, applicationApi, environmentApi } from '../api'
 import MonacoEditor from '../components/MonacoEditor.vue'
+import yaml from 'js-yaml'
 
 const loading = ref(false)
 const configs = ref([])
@@ -254,8 +423,16 @@ const envFilter = ref('')
 const searchKeyword = ref('')
 const statusFilter = ref('')
 const showCreateDialog = ref(false)
+const showUploadDialog = ref(false)
+const showEditorDialog = ref(false)
 const editingConfig = ref(null)
 const formRef = ref()
+const uploadFormRef = ref()
+const editorFormRef = ref()
+const uploadRef = ref()
+const fileList = ref([])
+const uploading = ref(false)
+const editorLoading = ref(false)
 
 const form = reactive({
   appId: '',
@@ -269,6 +446,43 @@ const form = reactive({
   description: '',
   status: 1
 })
+
+const uploadForm = reactive({
+  appId: '',
+  envId: '',
+  file: null
+})
+
+const uploadRules = {
+  appId: [
+    { required: true, message: '请选择应用', trigger: 'change' }
+  ],
+  envId: [
+    { required: true, message: '请选择环境', trigger: 'change' }
+  ],
+  file: [
+    { required: true, message: '请选择文件', trigger: 'change' }
+  ]
+}
+
+const editorForm = reactive({
+  appId: '',
+  envId: '',
+  configType: 'yaml',
+  content: ''
+})
+
+const editorRules = {
+  appId: [
+    { required: true, message: '请选择应用', trigger: 'change' }
+  ],
+  envId: [
+    { required: true, message: '请选择环境', trigger: 'change' }
+  ],
+  content: [
+    { required: true, message: '请输入配置内容', trigger: 'blur' }
+  ]
+}
 
 const rules = {
   appId: [
@@ -284,7 +498,7 @@ const rules = {
 }
 
 const monacoOptions = {
-  theme: 'vs-dark',
+  theme: 'vs',
   fontSize: 14,
   minimap: { enabled: false },
   scrollBeyondLastLine: false,
@@ -305,14 +519,14 @@ const getConfigTypeName = (type) => {
 
 const getConfigTypeColor = (type) => {
   const colors = {
-    1: '',
+    1: 'info',
     2: 'success',
     3: 'warning',
     4: 'primary',
     5: 'info',
     6: 'danger'
   }
-  return colors[type] || ''
+  return colors[type] || 'info'
 }
 
 const getMonacoLanguage = (type) => {
@@ -325,6 +539,15 @@ const getMonacoLanguage = (type) => {
     6: 'properties'
   }
   return languages[type] || 'plaintext'
+}
+
+const getEditorLanguage = (configType) => {
+  const languages = {
+    'yaml': 'yaml',
+    'json': 'json',
+    'properties': 'properties'
+  }
+  return languages[configType] || 'yaml'
 }
 
 const loadConfigs = async () => {
@@ -461,6 +684,278 @@ const formatDate = (date) => {
   return new Date(date).toLocaleString()
 }
 
+// 文件上传相关方法
+const handleFileChange = (file) => {
+  uploadForm.file = file.raw
+}
+
+const beforeUpload = (file) => {
+  const isValidFormat = /\.(json|yaml|yml|xml|properties)$/i.test(file.name)
+  if (!isValidFormat) {
+    ElMessage.error('只支持上传 JSON、YAML、XML、Properties 格式的文件')
+    return false
+  }
+  const isLt10M = file.size / 1024 / 1024 < 10
+  if (!isLt10M) {
+    ElMessage.error('文件大小不能超过 10MB')
+    return false
+  }
+  return true
+}
+
+const handleUpload = async () => {
+  try {
+    await uploadFormRef.value.validate()
+    
+    if (!uploadForm.file) {
+      ElMessage.error('请选择要上传的文件')
+      return
+    }
+    
+    uploading.value = true
+    
+    const formData = new FormData()
+    formData.append('file', uploadForm.file)
+    formData.append('appId', uploadForm.appId)
+    formData.append('envId', uploadForm.envId)
+    
+    const response = await configApi.uploadConfigFile(formData)
+    ElMessage.success(response.message || '文件导入成功')
+    
+    // 重置表单
+    uploadForm.appId = ''
+    uploadForm.envId = ''
+    uploadForm.file = null
+    fileList.value = []
+    showUploadDialog.value = false
+    
+    // 重新加载配置列表
+    loadConfigs()
+  } catch (error) {
+    console.error('文件上传失败:', error)
+    ElMessage.error('文件上传失败: ' + (error.message || '未知错误'))
+  } finally {
+    uploading.value = false
+  }
+}
+
+// 编辑器相关方法
+const handleConfigTypeChange = () => {
+  // 当配置类型改变时，可以清空内容或加载对应模板
+  if (editorForm.content.trim() === '') {
+    loadTemplate()
+  }
+}
+
+const loadTemplate = () => {
+  const templates = {
+    yaml: `# 应用配置模板
+database:
+  url: jdbc:mysql://localhost:3306/myapp
+  username: root
+  password: password
+  pool:
+    maxConnections: 20
+    minConnections: 5
+    timeout: 30000
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  database: 0
+  timeout: 2000
+
+logging:
+  level: INFO
+  file: /var/log/app.log
+  maxSize: 100MB
+  retention: 30d
+
+security:
+  jwt:
+    secret: your-secret-key
+    expiration: 86400
+  cors:
+    allowedOrigins:
+      - http://localhost:3000
+      - https://yourdomain.com
+    allowedMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+
+features:
+  enableCache: true
+  enableMetrics: true
+  enableHealthCheck: true`,
+    
+    json: `{
+  "database": {
+    "url": "jdbc:mysql://localhost:3306/myapp",
+    "username": "root",
+    "password": "password",
+    "pool": {
+      "maxConnections": 20,
+      "minConnections": 5,
+      "timeout": 30000
+    }
+  },
+  "redis": {
+    "host": "localhost",
+    "port": 6379,
+    "password": "",
+    "database": 0,
+    "timeout": 2000
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "/var/log/app.log",
+    "maxSize": "100MB",
+    "retention": "30d"
+  },
+  "security": {
+    "jwt": {
+      "secret": "your-secret-key",
+      "expiration": 86400
+    },
+    "cors": {
+      "allowedOrigins": ["http://localhost:3000", "https://yourdomain.com"],
+      "allowedMethods": ["GET", "POST", "PUT", "DELETE"]
+    }
+  },
+  "features": {
+    "enableCache": true,
+    "enableMetrics": true,
+    "enableHealthCheck": true
+  }
+}`,
+    
+    properties: `# 应用配置模板
+# Database Configuration
+database.url=jdbc:mysql://localhost:3306/myapp
+database.username=root
+database.password=password
+database.pool.maxConnections=20
+database.pool.minConnections=5
+database.pool.timeout=30000
+
+# Redis Configuration
+redis.host=localhost
+redis.port=6379
+redis.password=
+redis.database=0
+redis.timeout=2000
+
+# Logging Configuration
+logging.level=INFO
+logging.file=/var/log/app.log
+logging.maxSize=100MB
+logging.retention=30d
+
+# Security Configuration
+security.jwt.secret=your-secret-key
+security.jwt.expiration=86400
+security.cors.allowedOrigins=http://localhost:3000,https://yourdomain.com
+security.cors.allowedMethods=GET,POST,PUT,DELETE
+
+# Feature Flags
+features.enableCache=true
+features.enableMetrics=true
+features.enableHealthCheck=true`
+  }
+  
+  editorForm.content = templates[editorForm.configType] || templates.yaml
+}
+
+const formatContent = () => {
+  try {
+    if (editorForm.configType === 'json') {
+      const parsed = JSON.parse(editorForm.content)
+      editorForm.content = JSON.stringify(parsed, null, 2)
+      ElMessage.success('JSON格式化成功')
+    } else if (editorForm.configType === 'yaml') {
+      // 使用js-yaml库进行YAML格式化
+      const parsed = yaml.load(editorForm.content)
+      editorForm.content = yaml.dump(parsed, {
+        indent: 2,
+        lineWidth: 80,
+        noRefs: true
+      })
+      ElMessage.success('YAML格式化成功')
+    } else {
+      ElMessage.info('Properties格式无需格式化')
+    }
+  } catch (error) {
+    ElMessage.error('格式化失败: ' + error.message)
+  }
+}
+
+const validateContent = () => {
+  try {
+    if (editorForm.configType === 'json') {
+      JSON.parse(editorForm.content)
+      ElMessage.success('JSON格式正确')
+    } else if (editorForm.configType === 'yaml') {
+      // 使用js-yaml库进行YAML验证
+      yaml.load(editorForm.content)
+      ElMessage.success('YAML格式正确')
+    } else {
+      ElMessage.success('Properties格式验证通过')
+    }
+  } catch (error) {
+    ElMessage.error('格式验证失败: ' + error.message)
+  }
+}
+
+const handleEditorSubmit = async () => {
+  try {
+    await editorFormRef.value.validate()
+    
+    if (!editorForm.content.trim()) {
+      ElMessage.error('请输入配置内容')
+      return
+    }
+    
+    editorLoading.value = true
+    
+    // 创建FormData对象，模拟文件上传
+    const formData = new FormData()
+    
+    // 创建Blob对象，模拟文件
+    const blob = new Blob([editorForm.content], { 
+      type: `text/${editorForm.configType}` 
+    })
+    
+    // 创建File对象
+    const file = new File([blob], `config.${editorForm.configType}`, { 
+      type: `text/${editorForm.configType}` 
+    })
+    
+    formData.append('file', file)
+    formData.append('appId', editorForm.appId)
+    formData.append('envId', editorForm.envId)
+    
+    const response = await configApi.uploadConfigFile(formData)
+    ElMessage.success(response.message || '配置保存成功')
+    
+    // 重置表单
+    editorForm.appId = ''
+    editorForm.envId = ''
+    editorForm.content = ''
+    showEditorDialog.value = false
+    
+    // 重新加载配置列表
+    loadConfigs()
+  } catch (error) {
+    console.error('配置保存失败:', error)
+    ElMessage.error('配置保存失败: ' + (error.message || '未知错误'))
+  } finally {
+    editorLoading.value = false
+  }
+}
+
 onMounted(() => {
   loadConfigs()
   loadApplications()
@@ -477,6 +972,11 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 10px;
 }
 
 .dialog-footer {

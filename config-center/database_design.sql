@@ -181,6 +181,7 @@ CREATE TABLE user_roles (
     user_id BIGINT NOT NULL COMMENT '用户ID',
     role_id BIGINT NOT NULL COMMENT '角色ID',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
     UNIQUE KEY uk_user_role (user_id, role_id),
@@ -210,12 +211,33 @@ CREATE TABLE role_permissions (
     role_id BIGINT NOT NULL COMMENT '角色ID',
     permission_id BIGINT NOT NULL COMMENT '权限ID',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
     FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
     UNIQUE KEY uk_role_permission (role_id, permission_id),
     INDEX idx_role_id (role_id),
     INDEX idx_permission_id (permission_id)
 ) COMMENT '角色权限关联表';
+
+-- ==================== 应用权限管理相关表 ====================
+
+-- 应用权限表（用户对特定应用的权限）
+CREATE TABLE app_permissions (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '权限ID',
+    user_id BIGINT NOT NULL COMMENT '用户ID',
+    app_id BIGINT NOT NULL COMMENT '应用ID',
+    permission_type VARCHAR(32) NOT NULL COMMENT '权限类型：READ-只读，WRITE-读写，ADMIN-管理员',
+    status TINYINT DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (app_id) REFERENCES applications(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_user_app (user_id, app_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_app_id (app_id),
+    INDEX idx_permission_type (permission_type),
+    INDEX idx_status (status)
+) COMMENT '应用权限表';
 
 -- ==================== 推送管理相关表 ====================
 
@@ -341,6 +363,39 @@ INSERT INTO environments (env_code, env_name, env_desc, sort_order) VALUES
 ('dev', '开发环境', '开发测试环境', 1),
 ('test', '测试环境', '功能测试环境', 2),
 ('prod', '生产环境', '生产运行环境', 3);
+
+-- 插入示例应用
+INSERT INTO applications (app_code, app_name, app_desc, owner, contact_email) VALUES
+('user-service', '用户服务', '用户管理微服务', '张三', 'zhangsan@example.com'),
+('order-service', '订单服务', '订单管理微服务', '李四', 'lisi@example.com'),
+('payment-service', '支付服务', '支付处理微服务', '王五', 'wangwu@example.com');
+
+-- 插入示例配置项
+INSERT INTO config_items (app_id, env_id, config_key, config_value, config_type, description) VALUES
+(1, 1, 'server.port', '8081', 2, '服务端口'),
+(1, 1, 'database.url', 'jdbc:mysql://localhost:3306/user_dev', 1, '数据库连接URL'),
+(1, 1, 'redis.host', 'localhost', 1, 'Redis主机地址'),
+(1, 1, 'redis.port', '6379', 2, 'Redis端口'),
+(1, 2, 'server.port', '8081', 2, '服务端口'),
+(1, 2, 'database.url', 'jdbc:mysql://test-db:3306/user_test', 1, '数据库连接URL'),
+(1, 2, 'redis.host', 'test-redis', 1, 'Redis主机地址'),
+(1, 2, 'redis.port', '6379', 2, 'Redis端口'),
+(1, 3, 'server.port', '8081', 2, '服务端口'),
+(1, 3, 'database.url', 'jdbc:mysql://prod-db:3306/user_prod', 1, '数据库连接URL'),
+(1, 3, 'redis.host', 'prod-redis', 1, 'Redis主机地址'),
+(1, 3, 'redis.port', '6379', 2, 'Redis端口'),
+(2, 1, 'server.port', '8082', 2, '服务端口'),
+(2, 1, 'database.url', 'jdbc:mysql://localhost:3306/order_dev', 1, '数据库连接URL'),
+(2, 2, 'server.port', '8082', 2, '服务端口'),
+(2, 2, 'database.url', 'jdbc:mysql://test-db:3306/order_test', 1, '数据库连接URL'),
+(2, 3, 'server.port', '8082', 2, '服务端口'),
+(2, 3, 'database.url', 'jdbc:mysql://prod-db:3306/order_prod', 1, '数据库连接URL'),
+(3, 1, 'server.port', '8083', 2, '服务端口'),
+(3, 1, 'database.url', 'jdbc:mysql://localhost:3306/payment_dev', 1, '数据库连接URL'),
+(3, 2, 'server.port', '8083', 2, '服务端口'),
+(3, 2, 'database.url', 'jdbc:mysql://test-db:3306/payment_test', 1, '数据库连接URL'),
+(3, 3, 'server.port', '8083', 2, '服务端口'),
+(3, 3, 'database.url', 'jdbc:mysql://prod-db:3306/payment_prod', 1, '数据库连接URL');
 
 -- 插入默认角色
 INSERT INTO roles (role_code, role_name, role_desc) VALUES

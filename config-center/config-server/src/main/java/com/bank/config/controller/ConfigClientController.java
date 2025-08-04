@@ -1,7 +1,11 @@
 package com.bank.config.controller;
 
 import com.bank.config.common.ApiResponse;
+import com.bank.config.entity.Application;
+import com.bank.config.entity.Environment;
 import com.bank.config.entity.ConfigItem;
+import com.bank.config.repository.ApplicationRepository;
+import com.bank.config.repository.EnvironmentRepository;
 import com.bank.config.service.ConfigItemService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -18,12 +22,18 @@ import java.util.Optional;
  * @author bank
  */
 @RestController
-@RequestMapping("/client")
+@RequestMapping("/api/client")
 //@CrossOrigin(origins = "*")
 public class ConfigClientController {
 
     @Autowired
     private ConfigItemService configItemService;
+
+    @Autowired
+    private ApplicationRepository applicationRepository;
+
+    @Autowired
+    private EnvironmentRepository environmentRepository;
 
     /**
      * 获取单个配置项
@@ -34,9 +44,19 @@ public class ConfigClientController {
             @PathVariable String envCode,
             @PathVariable String configKey) {
         try {
-            // 这里需要根据appCode和envCode获取对应的ID
-            // 简化处理，实际应该通过Service查询
-            Optional<ConfigItem> configItem = configItemService.findByAppIdAndEnvIdAndConfigKey(1L, 1L, configKey);
+            // 根据appCode和envCode获取对应的ID
+            Optional<Application> application = applicationRepository.findByAppCodeAndStatus(appCode, 1);
+            if (!application.isPresent()) {
+                return ApiResponse.error(404, "应用不存在或已禁用: " + appCode);
+            }
+            
+            Optional<Environment> environment = environmentRepository.findByEnvCodeAndStatus(envCode, 1);
+            if (!environment.isPresent()) {
+                return ApiResponse.error(404, "环境不存在或已禁用: " + envCode);
+            }
+            
+            Optional<ConfigItem> configItem = configItemService.findByAppIdAndEnvIdAndConfigKey(
+                application.get().getId(), environment.get().getId(), configKey);
             if (configItem.isPresent()) {
                 return ApiResponse.success(configItem.get().getConfigValue());
             } else {
@@ -55,8 +75,19 @@ public class ConfigClientController {
             @PathVariable String appCode,
             @PathVariable String envCode) {
         try {
-            // 简化处理，实际应该通过Service查询
-            List<ConfigItem> configItems = configItemService.findByAppIdAndEnvId(1L, 1L);
+            // 根据appCode和envCode获取对应的ID
+            Optional<Application> application = applicationRepository.findByAppCodeAndStatus(appCode, 1);
+            if (!application.isPresent()) {
+                return ApiResponse.error(404, "应用不存在或已禁用: " + appCode);
+            }
+            
+            Optional<Environment> environment = environmentRepository.findByEnvCodeAndStatus(envCode, 1);
+            if (!environment.isPresent()) {
+                return ApiResponse.error(404, "环境不存在或已禁用: " + envCode);
+            }
+            
+            List<ConfigItem> configItems = configItemService.findByAppIdAndEnvId(
+                application.get().getId(), environment.get().getId());
             Map<String, String> configMap = new HashMap<>();
             for (ConfigItem configItem : configItems) {
                 configMap.put(configItem.getConfigKey(), configItem.getConfigValue());
@@ -76,8 +107,19 @@ public class ConfigClientController {
             @PathVariable String envCode,
             @PathVariable String configKey) {
         try {
-            // 简化处理，实际应该通过Service查询
-            Optional<ConfigItem> configItem = configItemService.findByAppIdAndEnvIdAndConfigKey(1L, 1L, configKey);
+            // 根据appCode和envCode获取对应的ID
+            Optional<Application> application = applicationRepository.findByAppCodeAndStatus(appCode, 1);
+            if (!application.isPresent()) {
+                return ApiResponse.error(404, "应用不存在或已禁用: " + appCode);
+            }
+            
+            Optional<Environment> environment = environmentRepository.findByEnvCodeAndStatus(envCode, 1);
+            if (!environment.isPresent()) {
+                return ApiResponse.error(404, "环境不存在或已禁用: " + envCode);
+            }
+            
+            Optional<ConfigItem> configItem = configItemService.findByAppIdAndEnvIdAndConfigKey(
+                application.get().getId(), environment.get().getId(), configKey);
             if (configItem.isPresent()) {
                 return ApiResponse.success(configItem.get());
             } else {
@@ -97,8 +139,19 @@ public class ConfigClientController {
             @PathVariable String envCode,
             @PathVariable String configKey) {
         try {
-            // 简化处理，实际应该通过Service查询
-            Optional<ConfigItem> configItem = configItemService.findByAppIdAndEnvIdAndConfigKey(1L, 1L, configKey);
+            // 根据appCode和envCode获取对应的ID
+            Optional<Application> application = applicationRepository.findByAppCodeAndStatus(appCode, 1);
+            if (!application.isPresent()) {
+                return ApiResponse.error(404, "应用不存在或已禁用: " + appCode);
+            }
+            
+            Optional<Environment> environment = environmentRepository.findByEnvCodeAndStatus(envCode, 1);
+            if (!environment.isPresent()) {
+                return ApiResponse.error(404, "环境不存在或已禁用: " + envCode);
+            }
+            
+            Optional<ConfigItem> configItem = configItemService.findByAppIdAndEnvIdAndConfigKey(
+                application.get().getId(), environment.get().getId(), configKey);
             return ApiResponse.success(configItem.isPresent());
         } catch (Exception e) {
             return ApiResponse.error(e.getMessage());
@@ -113,8 +166,19 @@ public class ConfigClientController {
             @PathVariable String appCode,
             @PathVariable String envCode) {
         try {
-            // 简化处理，实际应该通过Service查询
-            long count = configItemService.countByAppIdAndEnvId(1L, 1L);
+            // 根据appCode和envCode获取对应的ID
+            Optional<Application> application = applicationRepository.findByAppCodeAndStatus(appCode, 1);
+            if (!application.isPresent()) {
+                return ApiResponse.error(404, "应用不存在或已禁用: " + appCode);
+            }
+            
+            Optional<Environment> environment = environmentRepository.findByEnvCodeAndStatus(envCode, 1);
+            if (!environment.isPresent()) {
+                return ApiResponse.error(404, "环境不存在或已禁用: " + envCode);
+            }
+            
+            long count = configItemService.countByAppIdAndEnvId(
+                application.get().getId(), environment.get().getId());
             return ApiResponse.success(count);
         } catch (Exception e) {
             return ApiResponse.error(e.getMessage());

@@ -112,4 +112,10 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         environment.setStatus(status);
         return environmentRepository.save(environment);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countAllEnabled() {
+        return environmentRepository.countByStatus(1);
+    }
 } 

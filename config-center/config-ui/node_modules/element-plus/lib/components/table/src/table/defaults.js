@@ -89,7 +89,8 @@ var defaultProps = {
     type: Boolean,
     default: true
   },
-  preserveExpandedContent: Boolean
+  preserveExpandedContent: Boolean,
+  nativeScrollbar: Boolean
 };
 
 exports["default"] = defaultProps;

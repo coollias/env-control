@@ -3,6 +3,7 @@ package com.bank.config.service.impl;
 import com.bank.config.entity.Application;
 import com.bank.config.repository.ApplicationRepository;
 import com.bank.config.service.ApplicationService;
+import com.bank.config.service.PermissionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,6 +26,9 @@ public class ApplicationServiceImpl implements ApplicationService {
 
     @Autowired
     private ApplicationRepository applicationRepository;
+
+    @Autowired
+    private PermissionService permissionService;
 
     @Override
     public Application createApplication(Application application) {
@@ -117,5 +122,58 @@ public class ApplicationServiceImpl implements ApplicationService {
         Application application = optional.get();
         application.setStatus(status);
         return applicationRepository.save(application);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countAllEnabled() {
+        return applicationRepository.countByStatus(1);
+    }
+
+    /**
+     * 根据用户ID获取有权限的应用列表
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public List<Application> findApplicationsByUserId(Long userId) {
+        List<Long> userAppIds = permissionService.getUserAppIds(userId);
+        if (userAppIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return applicationRepository.findByIdInAndStatusOrderByCreatedAtDesc(userAppIds, 1);
+    }
+
+    /**
+     * 检查用户是否有应用的权限
+     */
+    public boolean hasApplicationPermission(Long userId, Long appId) {
+        return permissionService.hasAppPermission(userId, appId);
+    }
+
+    /**
+     * 检查用户是否有应用的写权限
+     */
+    public boolean hasApplicationWritePermission(Long userId, Long appId) {
+        return permissionService.hasAppPermissionType(userId, appId, "WRITE") || 
+               permissionService.hasAppPermissionType(userId, appId, "ADMIN");
+    }
+
+    /**
+     * 检查用户是否有应用的管理权限
+     */
+    public boolean hasApplicationAdminPermission(Long userId, Long appId) {
+        return permissionService.hasAppPermissionType(userId, appId, "ADMIN");
+    }
+
+    @Override
+    public boolean isAppCreator(Long userId, Long appId) {
+        Optional<Application> app = findById(appId);
+        return app.isPresent() && app.get().getCreatedBy() != null && 
+               app.get().getCreatedBy().equals(userId);
+    }
+
+    @Override
+    public List<Application> findApplicationsByCreator(Long creatorId) {
+        return applicationRepository.findByCreatedByAndStatusOrderByCreatedAtDesc(creatorId, 1);
     }
 } 

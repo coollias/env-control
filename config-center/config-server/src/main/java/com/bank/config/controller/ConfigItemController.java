@@ -3,14 +3,17 @@ package com.bank.config.controller;
 import com.bank.config.common.ApiResponse;
 import com.bank.config.entity.ConfigItem;
 import com.bank.config.service.ConfigItemService;
+import com.bank.config.service.FileParseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.validation.Valid;
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,12 +23,15 @@ import java.util.Optional;
  * @author bank
  */
 @RestController
-@RequestMapping("/config-items")
+@RequestMapping("/api/config-items")
 //@CrossOrigin(origins = "*")
 public class ConfigItemController {
 
     @Autowired
     private ConfigItemService configItemService;
+
+    @Autowired
+    private FileParseService fileParseService;
 
     /**
      * 创建配置项
@@ -194,6 +200,51 @@ public class ConfigItemController {
         try {
             long count = configItemService.countByAppIdAndEnvId(appId, envId);
             return ApiResponse.success(count);
+        } catch (Exception e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 上传配置文件并解析
+     */
+    @PostMapping("/upload")
+    public ApiResponse<List<ConfigItem>> uploadConfigFile(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("appId") Long appId,
+            @RequestParam("envId") Long envId) {
+        try {
+            // 验证文件格式
+            if (!fileParseService.isSupportedFileFormat(file.getOriginalFilename())) {
+                return ApiResponse.error("不支持的文件格式，请上传JSON、YAML、XML或Properties文件");
+            }
+
+            // 解析文件
+            List<ConfigItem> configItems = fileParseService.parseConfigFile(file, appId, envId);
+            
+            if (configItems.isEmpty()) {
+                return ApiResponse.error("文件中没有找到有效的配置项");
+            }
+
+            // 批量保存配置项
+            List<ConfigItem> savedConfigItems = configItemService.batchCreateConfigItems(configItems);
+            
+            return ApiResponse.success("文件解析成功，共导入 " + savedConfigItems.size() + " 个配置项", savedConfigItems);
+        } catch (IOException e) {
+            return ApiResponse.error("文件解析失败: " + e.getMessage());
+        } catch (Exception e) {
+            return ApiResponse.error("文件上传失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取支持的文件格式
+     */
+    @GetMapping("/supported-formats")
+    public ApiResponse<List<String>> getSupportedFormats() {
+        try {
+            List<String> formats = fileParseService.getSupportedFormats();
+            return ApiResponse.success(formats);
         } catch (Exception e) {
             return ApiResponse.error(e.getMessage());
         }

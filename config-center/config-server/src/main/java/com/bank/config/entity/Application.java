@@ -27,6 +27,9 @@ public class Application extends BaseEntity {
     @Column(name = "contact_email", length = 128)
     private String contactEmail;
 
+    @Column(name = "created_by", nullable = false)
+    private Long createdBy; // 创建者用户ID
+
     @Column(name = "status", nullable = false, columnDefinition = "TINYINT DEFAULT 1")
     private Integer status = 1; // 1-启用，0-禁用
 
@@ -72,6 +75,14 @@ public class Application extends BaseEntity {
 
     public void setContactEmail(String contactEmail) {
         this.contactEmail = contactEmail;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
     }
 
     public Integer getStatus() {

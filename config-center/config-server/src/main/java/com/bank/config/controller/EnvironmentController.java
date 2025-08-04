@@ -20,7 +20,7 @@ import java.util.Optional;
  * @author bank
  */
 @RestController
-@RequestMapping("/environments")
+@RequestMapping("/api/environments")
 //@CrossOrigin(origins = "*")
 public class EnvironmentController {
 

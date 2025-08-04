@@ -46,20 +46,20 @@ function useTree(watcherData) {
   });
   const normalize = (data) => {
     const rowKey = watcherData.rowKey.value;
-    const res = /* @__PURE__ */ new Map();
+    const res = {};
     util.walkTreeNode(data, (parent, children, level) => {
-      const parentId = util.getRowIdentity(parent, rowKey, true);
+      const parentId = util.getRowIdentity(parent, rowKey);
       if (shared.isArray(children)) {
-        res.set(parentId, {
-          children: children.map((row) => row[rowKey]),
+        res[parentId] = {
+          children: children.map((row) => util.getRowIdentity(row, rowKey)),
           level
-        });
+        };
       } else if (lazy.value) {
-        res.set(parentId, {
+        res[parentId] = {
           children: [],
           lazy: true,
           level
-        });
+        };
       }
     }, childrenColumnName.value, lazyColumnIdentifier.value, lazy.value);
     return res;
@@ -69,8 +69,9 @@ function useTree(watcherData) {
     ifExpandAll || (ifExpandAll = (_a = instance.store) == null ? void 0 : _a.states.defaultExpandAll.value);
     const nested = normalizedData.value;
     const normalizedLazyNode_ = normalizedLazyNode.value;
+    const keys = Object.keys(nested);
     const newTreeData = {};
-    if (nested instanceof Map && nested.size) {
+    if (keys.length) {
       const oldTreeData = vue.unref(treeData);
       const rootLazyRowKeys = [];
       const getExpanded = (oldValue, key) => {
@@ -85,9 +86,9 @@ function useTree(watcherData) {
           return !!((oldValue == null ? void 0 : oldValue.expanded) || included);
         }
       };
-      nested.forEach((_, key) => {
+      keys.forEach((key) => {
         const oldValue = oldTreeData[key];
-        const newValue = { ...nested.get(key) };
+        const newValue = { ...nested[key] };
         newValue.expanded = getExpanded(oldValue, key);
         if (newValue.lazy) {
           const { loaded = false, loading = false } = oldValue || {};

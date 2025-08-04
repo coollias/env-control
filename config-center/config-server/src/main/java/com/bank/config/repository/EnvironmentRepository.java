@@ -41,4 +41,9 @@ public interface EnvironmentRepository extends JpaRepository<Environment, Long> 
      * 检查环境编码是否存在
      */
     boolean existsByEnvCode(String envCode);
+
+    /**
+     * 根据状态统计环境数量
+     */
+    long countByStatus(Integer status);
 } 

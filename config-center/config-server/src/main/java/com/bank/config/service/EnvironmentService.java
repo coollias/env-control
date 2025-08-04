@@ -58,4 +58,9 @@ public interface EnvironmentService {
      * 启用/禁用环境
      */
     Environment updateStatus(Long id, Integer status);
+
+    /**
+     * 统计启用的环境数量
+     */
+    long countAllEnabled();
 } 
