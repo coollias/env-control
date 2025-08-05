@@ -1,7 +1,9 @@
 package com.bank.config.service.impl;
 
 import com.bank.config.entity.ConfigItem;
+import com.bank.config.entity.Environment;
 import com.bank.config.repository.ConfigItemRepository;
+import com.bank.config.repository.EnvironmentRepository;
 import com.bank.config.service.ConfigItemService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -10,8 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 配置项Service实现类
@@ -24,6 +26,9 @@ public class ConfigItemServiceImpl implements ConfigItemService {
 
     @Autowired
     private ConfigItemRepository configItemRepository;
+
+    @Autowired
+    private EnvironmentRepository environmentRepository;
 
     @Override
     public ConfigItem createConfigItem(ConfigItem configItem) {
@@ -189,5 +194,106 @@ public class ConfigItemServiceImpl implements ConfigItemService {
 
     private boolean existsByAppIdAndEnvIdAndConfigKey(Long appId, Long envId, String configKey) {
         return configItemRepository.existsByAppIdAndEnvIdAndConfigKey(appId, envId, configKey);
+    }
+
+    // ==================== 环境级配置覆盖功能实现 ====================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ConfigItem> getMergedConfigsForAppAndEnv(Long appId, Long envId) {
+        // 获取环境继承链
+        List<Long> envChain = getEnvironmentInheritanceChain(appId, envId);
+        
+        // 按环境顺序收集配置，后面的环境会覆盖前面的配置
+        Map<String, ConfigItem> mergedConfigs = new LinkedHashMap<>();
+        
+        for (Long currentEnvId : envChain) {
+            List<ConfigItem> envConfigs = configItemRepository.findByAppIdAndEnvIdAndStatusOrderByConfigKey(appId, currentEnvId, 1);
+            for (ConfigItem config : envConfigs) {
+                mergedConfigs.put(config.getConfigKey(), config);
+            }
+        }
+        
+        return new ArrayList<>(mergedConfigs.values());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, ConfigItem> getMergedConfigMapForAppAndEnv(Long appId, Long envId) {
+        // 获取环境继承链
+        List<Long> envChain = getEnvironmentInheritanceChain(appId, envId);
+        
+        // 按环境顺序收集配置，后面的环境会覆盖前面的配置
+        Map<String, ConfigItem> mergedConfigs = new LinkedHashMap<>();
+        
+        for (Long currentEnvId : envChain) {
+            List<ConfigItem> envConfigs = configItemRepository.findByAppIdAndEnvIdAndStatusOrderByConfigKey(appId, currentEnvId, 1);
+            for (ConfigItem config : envConfigs) {
+                mergedConfigs.put(config.getConfigKey(), config);
+            }
+        }
+        
+        return mergedConfigs;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ConfigItem> getConfigWithInheritance(Long appId, Long envId, String configKey) {
+        // 获取环境继承链
+        List<Long> envChain = getEnvironmentInheritanceChain(appId, envId);
+        
+        // 从高优先级环境开始查找配置
+        for (Long currentEnvId : envChain) {
+            Optional<ConfigItem> config = configItemRepository.findByAppIdAndEnvIdAndConfigKey(appId, currentEnvId, configKey);
+            if (config.isPresent() && config.get().getStatus() == 1) {
+                return config;
+            }
+        }
+        
+        return Optional.empty();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> getEnvironmentInheritanceChain(Long appId, Long targetEnvId) {
+        // 获取目标环境信息
+        Optional<Environment> targetEnv = environmentRepository.findById(targetEnvId);
+        if (!targetEnv.isPresent()) {
+            return Collections.emptyList();
+        }
+        
+        Integer targetSortOrder = targetEnv.get().getSortOrder();
+        
+        // 获取所有启用的环境，按sort_order排序
+        List<Environment> allEnvs = environmentRepository.findByStatusOrderBySortOrder(1);
+        
+        // 筛选出sort_order小于等于目标环境的环境ID
+        return allEnvs.stream()
+                .filter(env -> env.getSortOrder() <= targetSortOrder)
+                .sorted(Comparator.comparing(Environment::getSortOrder))
+                .map(Environment::getId)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Map<String, String>> getConfigDifferencesAcrossEnvironments(Long appId) {
+        // 获取所有启用的环境，按sort_order排序
+        List<Environment> allEnvs = environmentRepository.findByStatusOrderBySortOrder(1);
+        
+        Map<String, Map<String, String>> differences = new HashMap<>();
+        
+        // 为每个环境获取合并后的配置
+        for (Environment env : allEnvs) {
+            Map<String, ConfigItem> envConfigs = getMergedConfigMapForAppAndEnv(appId, env.getId());
+            Map<String, String> configValues = envConfigs.values().stream()
+                    .collect(Collectors.toMap(
+                            ConfigItem::getConfigKey,
+                            ConfigItem::getConfigValue
+                    ));
+            differences.put(env.getEnvCode(), configValues);
+        }
+        
+        return differences;
     }
 } 

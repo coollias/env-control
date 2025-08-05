@@ -112,7 +112,19 @@ export const configApi = {
     }
   }),
   // 获取支持的文件格式
-  getSupportedFormats: () => api.get('/config-items/supported-formats')
+  getSupportedFormats: () => api.get('/config-items/supported-formats'),
+  
+  // ==================== 环境级配置覆盖功能 ====================
+  // 获取应用在指定环境下的完整配置（包含继承的配置）
+  getMergedConfigs: (appId, envId) => api.get(`/config-items/app/${appId}/env/${envId}/merged`),
+  // 获取应用在指定环境下的配置映射（键值对形式）
+  getMergedConfigMap: (appId, envId) => api.get(`/config-items/app/${appId}/env/${envId}/merged-map`),
+  // 获取指定配置键在环境继承链中的最终值
+  getConfigWithInheritance: (appId, envId, configKey) => api.get(`/config-items/app/${appId}/env/${envId}/key/${configKey}/inherited`),
+  // 获取环境继承链
+  getEnvironmentInheritanceChain: (appId, envId) => api.get(`/config-items/app/${appId}/env/${envId}/inheritance-chain`),
+  // 获取应用在所有环境下的配置差异
+  getConfigDifferences: (appId) => api.get(`/config-items/app/${appId}/config-differences`)
 }
 
 // 客户端API

@@ -33,6 +33,11 @@ public interface EnvironmentRepository extends JpaRepository<Environment, Long> 
     List<Environment> findByStatusOrderBySortOrderAsc(Integer status);
 
     /**
+     * 根据状态查找环境列表，按排序字段排序（简化方法名）
+     */
+    List<Environment> findByStatusOrderBySortOrder(Integer status);
+
+    /**
      * 根据状态分页查找环境列表，按排序字段排序
      */
     Page<Environment> findByStatusOrderBySortOrderAsc(Integer status, Pageable pageable);

@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -83,4 +84,33 @@ public interface ConfigItemService {
      * 根据状态统计配置项数量
      */
     long countByStatus(Integer status);
+
+    // ==================== 环境级配置覆盖功能 ====================
+
+    /**
+     * 获取应用在指定环境下的完整配置（包含继承的配置）
+     * 根据环境的sort_order进行配置继承和覆盖
+     */
+    List<ConfigItem> getMergedConfigsForAppAndEnv(Long appId, Long envId);
+
+    /**
+     * 获取应用在指定环境下的配置映射（键值对形式）
+     * 包含继承的配置，后排序的环境会覆盖前面环境的配置
+     */
+    Map<String, ConfigItem> getMergedConfigMapForAppAndEnv(Long appId, Long envId);
+
+    /**
+     * 获取指定配置键在环境继承链中的最终值
+     */
+    Optional<ConfigItem> getConfigWithInheritance(Long appId, Long envId, String configKey);
+
+    /**
+     * 获取环境继承链（按sort_order排序）
+     */
+    List<Long> getEnvironmentInheritanceChain(Long appId, Long targetEnvId);
+
+    /**
+     * 获取应用在所有环境下的配置差异
+     */
+    Map<String, Map<String, String>> getConfigDifferencesAcrossEnvironments(Long appId);
 } 

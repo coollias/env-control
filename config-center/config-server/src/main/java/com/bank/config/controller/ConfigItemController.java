@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.validation.Valid;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -111,6 +112,85 @@ public class ConfigItemController {
         try {
             List<ConfigItem> configItems = configItemService.findByAppIdAndEnvId(appId, envId);
             return ApiResponse.success(configItems);
+        } catch (Exception e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 获取应用在指定环境下的完整配置（包含继承的配置）
+     */
+    @GetMapping("/app/{appId}/env/{envId}/merged")
+    public ApiResponse<List<ConfigItem>> getMergedConfigsForAppAndEnv(
+            @PathVariable Long appId,
+            @PathVariable Long envId) {
+        try {
+            List<ConfigItem> mergedConfigs = configItemService.getMergedConfigsForAppAndEnv(appId, envId);
+            return ApiResponse.success(mergedConfigs);
+        } catch (Exception e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 获取应用在指定环境下的配置映射（键值对形式）
+     */
+    @GetMapping("/app/{appId}/env/{envId}/merged-map")
+    public ApiResponse<Map<String, ConfigItem>> getMergedConfigMapForAppAndEnv(
+            @PathVariable Long appId,
+            @PathVariable Long envId) {
+        try {
+            Map<String, ConfigItem> mergedConfigs = configItemService.getMergedConfigMapForAppAndEnv(appId, envId);
+            return ApiResponse.success(mergedConfigs);
+        } catch (Exception e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 获取指定配置键在环境继承链中的最终值
+     */
+    @GetMapping("/app/{appId}/env/{envId}/key/{configKey}/inherited")
+    public ApiResponse<ConfigItem> getConfigWithInheritance(
+            @PathVariable Long appId,
+            @PathVariable Long envId,
+            @PathVariable String configKey) {
+        try {
+            Optional<ConfigItem> config = configItemService.getConfigWithInheritance(appId, envId, configKey);
+            if (config.isPresent()) {
+                return ApiResponse.success(config.get());
+            } else {
+                return ApiResponse.error(404, "配置项不存在");
+            }
+        } catch (Exception e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 获取环境继承链
+     */
+    @GetMapping("/app/{appId}/env/{envId}/inheritance-chain")
+    public ApiResponse<List<Long>> getEnvironmentInheritanceChain(
+            @PathVariable Long appId,
+            @PathVariable Long envId) {
+        try {
+            List<Long> envChain = configItemService.getEnvironmentInheritanceChain(appId, envId);
+            return ApiResponse.success(envChain);
+        } catch (Exception e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 获取应用在所有环境下的配置差异
+     */
+    @GetMapping("/app/{appId}/config-differences")
+    public ApiResponse<Map<String, Map<String, String>>> getConfigDifferencesAcrossEnvironments(
+            @PathVariable Long appId) {
+        try {
+            Map<String, Map<String, String>> differences = configItemService.getConfigDifferencesAcrossEnvironments(appId);
+            return ApiResponse.success(differences);
         } catch (Exception e) {
             return ApiResponse.error(e.getMessage());
         }
