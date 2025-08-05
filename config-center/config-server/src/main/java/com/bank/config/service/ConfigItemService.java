@@ -113,4 +113,36 @@ public interface ConfigItemService {
      * 获取应用在所有环境下的配置差异
      */
     Map<String, Map<String, String>> getConfigDifferencesAcrossEnvironments(Long appId);
+
+    // ==================== 配置项版本管理功能 ====================
+
+    /**
+     * 创建配置项并自动生成版本
+     */
+    ConfigItem createConfigItemWithVersion(ConfigItem configItem, String createdBy);
+
+    /**
+     * 更新配置项并自动生成版本
+     */
+    ConfigItem updateConfigItemWithVersion(Long id, ConfigItem configItem, String createdBy);
+
+    /**
+     * 获取配置项的版本历史
+     */
+    List<Map<String, Object>> getConfigItemVersionHistory(Long appId, Long envId, String configKey);
+
+    /**
+     * 回滚配置项到指定版本
+     */
+    ConfigItem rollbackConfigItemToVersion(Long appId, Long envId, String configKey, String targetVersionNumber, String createdBy);
+
+    /**
+     * 测试缓存方法
+     */
+    String testCache(Long id);
+
+    /**
+     * 获取所有配置项列表（用于下拉选择等）
+     */
+    List<ConfigItem> findAllConfigItems();
 } 

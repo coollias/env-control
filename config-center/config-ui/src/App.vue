@@ -37,6 +37,10 @@
               <el-icon><View /></el-icon>
               <span>应用环境</span>
             </el-menu-item>
+            <!-- <el-menu-item index="/config-versions">
+              <el-icon><Clock /></el-icon>
+              <span>版本管理</span>
+            </el-menu-item> -->
             <el-menu-item index="/client">
               <el-icon><Connection /></el-icon>
               <span>客户端API</span>
@@ -63,7 +67,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { House, Grid, Setting, Document, View, Connection, Lock } from '@element-plus/icons-vue'
+import { House, Grid, Setting, Document, View, Clock, Connection, Lock } from '@element-plus/icons-vue'
 
 const route = useRoute()
 

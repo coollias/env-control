@@ -1,10 +1,15 @@
 package com.bank.config.service.impl;
 
 import com.bank.config.entity.ConfigItem;
+import com.bank.config.entity.ConfigVersion;
+import com.bank.config.entity.ConfigChange;
 import com.bank.config.entity.Environment;
 import com.bank.config.repository.ConfigItemRepository;
+import com.bank.config.repository.ConfigVersionRepository;
+import com.bank.config.repository.ConfigChangeRepository;
 import com.bank.config.repository.EnvironmentRepository;
 import com.bank.config.service.ConfigItemService;
+import com.bank.config.service.RedisCacheService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -12,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -29,6 +36,15 @@ public class ConfigItemServiceImpl implements ConfigItemService {
 
     @Autowired
     private EnvironmentRepository environmentRepository;
+
+    @Autowired
+    private ConfigVersionRepository configVersionRepository;
+
+    @Autowired
+    private ConfigChangeRepository configChangeRepository;
+
+    @Autowired
+    private RedisCacheService redisCacheService;
 
     @Override
     public ConfigItem createConfigItem(ConfigItem configItem) {
@@ -54,7 +70,12 @@ public class ConfigItemServiceImpl implements ConfigItemService {
             configItem.setGroupId(0L);
         }
         
-        return configItemRepository.save(configItem);
+        ConfigItem saved = configItemRepository.save(configItem);
+        
+        // 清理相关缓存
+        redisCacheService.deleteByPattern("config*");
+        
+        return saved;
     }
 
     @Override
@@ -82,7 +103,12 @@ public class ConfigItemServiceImpl implements ConfigItemService {
         existing.setDescription(configItem.getDescription());
         existing.setGroupId(configItem.getGroupId());
         
-        return configItemRepository.save(existing);
+        ConfigItem saved = configItemRepository.save(existing);
+        
+        // 清理相关缓存
+        redisCacheService.deleteByPattern("config*");
+        
+        return saved;
     }
 
     @Override
@@ -91,29 +117,83 @@ public class ConfigItemServiceImpl implements ConfigItemService {
             throw new RuntimeException("配置项不存在: " + id);
         }
         configItemRepository.deleteById(id);
+        
+        // 清理相关缓存
+        redisCacheService.deleteByPattern("config*");
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<ConfigItem> findById(Long id) {
-        return configItemRepository.findById(id);
+        // 尝试从缓存获取
+        String cacheKey = "config:" + id;
+        Optional<ConfigItem> cached = redisCacheService.get(cacheKey, ConfigItem.class);
+        if (cached.isPresent()) {
+            System.out.println("=== 配置项缓存命中: " + cacheKey + " ===");
+            return cached;
+        }
+        
+        System.out.println("=== 配置项缓存未命中: " + cacheKey + " ===");
+        
+        // 从数据库获取
+        Optional<ConfigItem> config = configItemRepository.findById(id);
+        if (config.isPresent()) {
+            // 存入缓存
+            redisCacheService.set(cacheKey, config.get());
+            System.out.println("=== 配置项已缓存: " + cacheKey + " ===");
+        }
+        
+        return config;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<ConfigItem> findByAppIdAndEnvIdAndConfigKey(Long appId, Long envId, String configKey) {
-        return configItemRepository.findByAppIdAndEnvIdAndConfigKey(appId, envId, configKey);
+        // 尝试从缓存获取
+        String cacheKey = "config:key:" + appId + ":" + envId + ":" + configKey;
+        Optional<ConfigItem> cached = redisCacheService.get(cacheKey, ConfigItem.class);
+        if (cached.isPresent()) {
+            return cached;
+        }
+        
+        // 从数据库获取
+        Optional<ConfigItem> config = configItemRepository.findByAppIdAndEnvIdAndConfigKey(appId, envId, configKey);
+        if (config.isPresent()) {
+            // 存入缓存
+            redisCacheService.set(cacheKey, config.get());
+        }
+        
+        return config;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ConfigItem> findByAppIdAndEnvId(Long appId, Long envId) {
-        return configItemRepository.findByAppIdAndEnvIdAndStatusOrderByConfigKey(appId, envId, 1);
+        // 尝试从缓存获取
+        String cacheKey = "config:list:" + appId + ":" + envId;
+        Optional<List<ConfigItem>> cached = redisCacheService.get(cacheKey, new com.fasterxml.jackson.core.type.TypeReference<List<ConfigItem>>() {});
+        if (cached.isPresent()) {
+            System.out.println("=== 配置项列表缓存命中: " + cacheKey + " ===");
+            return cached.get();
+        }
+        
+        System.out.println("=== 配置项列表缓存未命中: " + cacheKey + " ===");
+        
+        // 从数据库获取
+        List<ConfigItem> configs = configItemRepository.findByAppIdAndEnvIdAndStatusOrderByConfigKey(appId, envId, 1);
+        
+        // 存入缓存
+        redisCacheService.set(cacheKey, configs);
+        System.out.println("=== 配置项列表已缓存: " + cacheKey + " ===");
+        
+        return configs;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<ConfigItem> findConfigItems(Long appId, Long envId, String keyword, Integer status, Pageable pageable) {
+        // 对于分页查询，不缓存，直接查询数据库
+        // 因为分页查询变化频繁，缓存效果不明显
         if (StringUtils.hasText(keyword)) {
             // 有关键字时，需要指定appId和envId
             if (appId == null || envId == null) {
@@ -295,5 +375,247 @@ public class ConfigItemServiceImpl implements ConfigItemService {
         }
         
         return differences;
+    }
+
+    // ==================== 配置项版本管理功能实现 ====================
+
+    /**
+     * 生成版本号
+     */
+    private String generateVersionNumber(Long appId, Long envId) {
+        String latestVersion = configVersionRepository.findLatestVersionNumber(appId, envId);
+        
+        if (latestVersion == null) {
+            // 如果没有版本，从v1.0.0开始
+            return "v1.0.0";
+        }
+        
+        // 解析版本号并递增
+        try {
+            String[] parts = latestVersion.substring(1).split("\\.");
+            int major = Integer.parseInt(parts[0]);
+            int minor = Integer.parseInt(parts[1]);
+            int patch = Integer.parseInt(parts[2]);
+            
+            // 递增补丁版本
+            patch++;
+            
+            return String.format("v%d.%d.%d", major, minor, patch);
+        } catch (Exception e) {
+            // 如果版本号格式不正确，使用时间戳
+            return "v" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+        }
+    }
+
+    @Override
+    public ConfigItem createConfigItemWithVersion(ConfigItem configItem, String createdBy) {
+        // 创建配置项
+        ConfigItem created = createConfigItem(configItem);
+        
+        // 自动生成版本
+        String versionNumber = generateVersionNumber(created.getAppId(), created.getEnvId());
+        
+        // 创建版本记录
+        ConfigVersion version = new ConfigVersion();
+        version.setAppId(created.getAppId());
+        version.setEnvId(created.getEnvId());
+        version.setVersionNumber(versionNumber);
+        version.setVersionName("新增配置项: " + created.getConfigKey());
+        version.setVersionDesc("新增配置项 " + created.getConfigKey());
+        version.setChangeType(1);
+        version.setCreatedBy(createdBy);
+        version.setChangeSummary("新增了 1 个配置项");
+        
+        version = configVersionRepository.save(version);
+        
+        // 创建变更记录
+        ConfigChange change = new ConfigChange();
+        change.setVersionId(version.getId());
+        change.setConfigKey(created.getConfigKey());
+        change.setOldValue(null); // 新增时原值为null
+        change.setNewValue(created.getConfigValue());
+        change.setChangeType(1);
+        
+        configChangeRepository.save(change);
+        
+        return created;
+    }
+
+    @Override
+    public ConfigItem updateConfigItemWithVersion(Long id, ConfigItem configItem, String createdBy) {
+        // 获取原配置项
+        Optional<ConfigItem> existingConfig = findById(id);
+        if (!existingConfig.isPresent()) {
+            throw new RuntimeException("配置项不存在: " + id);
+        }
+        
+        ConfigItem existing = existingConfig.get();
+        
+        // 保存原始值，因为updateConfigItem会直接修改existing对象
+        String oldValue = existing.getConfigValue();
+        
+        // 更新配置项
+        ConfigItem updated = updateConfigItem(id, configItem);
+        
+        // 自动生成版本
+        String versionNumber = generateVersionNumber(updated.getAppId(), updated.getEnvId());
+        
+        // 创建版本记录
+        ConfigVersion version = new ConfigVersion();
+        version.setAppId(updated.getAppId());
+        version.setEnvId(updated.getEnvId());
+        version.setVersionNumber(versionNumber);
+        version.setVersionName("修改配置项: " + updated.getConfigKey());
+        version.setVersionDesc("修改配置项 " + updated.getConfigKey() + "，原值: " + oldValue + "，新值: " + updated.getConfigValue());
+        version.setChangeType(2);
+        version.setCreatedBy(createdBy);
+        version.setChangeSummary("修改了 1 个配置项");
+        
+        version = configVersionRepository.save(version);
+        
+        // 创建变更记录
+        ConfigChange change = new ConfigChange();
+        change.setVersionId(version.getId());
+        change.setConfigKey(updated.getConfigKey());
+        change.setOldValue(oldValue);
+        change.setNewValue(updated.getConfigValue());
+        change.setChangeType(2);
+
+        configChangeRepository.save(change);
+        
+        return updated;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getConfigItemVersionHistory(Long appId, Long envId, String configKey) {
+        // 获取所有版本
+        List<ConfigVersion> versions = configVersionRepository.findByAppIdAndEnvIdOrderByCreatedAtDesc(appId, envId);
+        
+        List<Map<String, Object>> history = new ArrayList<>();
+        
+        for (ConfigVersion version : versions) {
+            List<ConfigChange> changes = configChangeRepository.findByVersionIdOrderByConfigKey(version.getId());
+            
+            for (ConfigChange change : changes) {
+                if (change.getConfigKey().equals(configKey)) {
+                    Map<String, Object> historyItem = new HashMap<>();
+                    historyItem.put("versionNumber", version.getVersionNumber());
+                    historyItem.put("versionName", version.getVersionName());
+                    historyItem.put("oldValue", change.getOldValue());
+                    historyItem.put("newValue", change.getNewValue());
+                    historyItem.put("changeType", change.getChangeType());
+                    historyItem.put("createdBy", version.getCreatedBy());
+                    historyItem.put("createdAt", version.getCreatedAt());
+                    historyItem.put("versionDesc", version.getVersionDesc());
+                    history.add(historyItem);
+                }
+            }
+        }
+        
+        // 按创建时间倒序排序
+        history.sort((a, b) -> {
+            LocalDateTime timeA = (LocalDateTime) a.get("createdAt");
+            LocalDateTime timeB = (LocalDateTime) b.get("createdAt");
+            return timeB.compareTo(timeA);
+        });
+        
+        return history;
+    }
+
+    @Override
+    public ConfigItem rollbackConfigItemToVersion(Long appId, Long envId, String configKey, String targetVersionNumber, String createdBy) {
+        // 获取目标版本的配置值
+        Optional<ConfigVersion> targetVersion = configVersionRepository.findByAppIdAndEnvIdAndVersionNumber(appId, envId, targetVersionNumber);
+        if (!targetVersion.isPresent()) {
+            throw new RuntimeException("目标版本不存在: " + targetVersionNumber);
+        }
+        
+        List<ConfigChange> changes = configChangeRepository.findByVersionIdOrderByConfigKey(targetVersion.get().getId());
+        String targetValue = null;
+        
+        for (ConfigChange change : changes) {
+            if (change.getConfigKey().equals(configKey)) {
+                targetValue = change.getNewValue();
+                break;
+            }
+        }
+        
+        if (targetValue == null) {
+            throw new RuntimeException("在目标版本中未找到配置项: " + configKey);
+        }
+        
+        // 获取当前配置项
+        Optional<ConfigItem> currentConfig = findByAppIdAndEnvIdAndConfigKey(appId, envId, configKey);
+        if (!currentConfig.isPresent()) {
+            throw new RuntimeException("当前配置项不存在: " + configKey);
+        }
+        
+        ConfigItem current = currentConfig.get();
+        
+        // 更新配置项值
+        current.setConfigValue(targetValue);
+        ConfigItem updated = updateConfigItem(current.getId(), current);
+        
+        // 生成回滚版本
+        String versionNumber = generateVersionNumber(appId, envId);
+        
+        // 创建版本记录
+        ConfigVersion version = new ConfigVersion();
+        version.setAppId(appId);
+        version.setEnvId(envId);
+        version.setVersionNumber(versionNumber);
+        version.setVersionName("回滚配置项: " + configKey);
+        version.setVersionDesc("回滚配置项 " + configKey + " 到版本 " + targetVersionNumber);
+        version.setChangeType(2);
+        version.setCreatedBy(createdBy);
+        version.setChangeSummary("回滚了 1 个配置项");
+        
+        version = configVersionRepository.save(version);
+        
+        // 创建变更记录
+        ConfigChange change = new ConfigChange();
+        change.setVersionId(version.getId());
+        change.setConfigKey(configKey);
+        change.setOldValue(current.getConfigValue()); // 当前值作为原值
+        change.setNewValue(targetValue); // 目标版本的值作为新值
+        change.setChangeType(2);
+        
+        configChangeRepository.save(change);
+        
+        return updated;
+    }
+
+    /**
+     * 测试缓存方法
+     */
+    public String testCache(Long id) {
+        return "test-value-" + id;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ConfigItem> findAllConfigItems() {
+        // 尝试从缓存获取
+        String cacheKey = "config:all";
+        Optional<List<ConfigItem>> cached = redisCacheService.get(cacheKey, new com.fasterxml.jackson.core.type.TypeReference<List<ConfigItem>>() {});
+        if (cached.isPresent()) {
+            System.out.println("=== 从缓存获取所有配置项列表 ===");
+            return cached.get();
+        }
+        
+        System.out.println("=== 缓存未命中所有配置项列表 ===");
+        
+        // 从数据库获取
+        List<ConfigItem> configs = configItemRepository.findAll().stream()
+                .filter(config -> config.getStatus() != null && config.getStatus() == 1)
+                .sorted((a, b) -> a.getConfigKey().compareTo(b.getConfigKey()))
+                .collect(java.util.stream.Collectors.toList());
+        
+        // 存入缓存
+        redisCacheService.set(cacheKey, configs);
+        System.out.println("=== 所有配置项列表已缓存 ===");
+        
+        return configs;
     }
 } 

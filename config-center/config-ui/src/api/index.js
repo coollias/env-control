@@ -124,7 +124,47 @@ export const configApi = {
   // 获取环境继承链
   getEnvironmentInheritanceChain: (appId, envId) => api.get(`/config-items/app/${appId}/env/${envId}/inheritance-chain`),
   // 获取应用在所有环境下的配置差异
-  getConfigDifferences: (appId) => api.get(`/config-items/app/${appId}/config-differences`)
+  getConfigDifferences: (appId) => api.get(`/config-items/app/${appId}/config-differences`),
+  
+  // ==================== 配置项版本管理功能 ====================
+  // 创建配置项并自动生成版本
+  createConfigWithVersion: (data) => api.post('/config-items/with-version', data),
+  // 更新配置项并自动生成版本
+  updateConfigWithVersion: (id, data) => api.put(`/config-items/${id}/with-version`, data),
+  // 获取配置项的版本历史
+  getConfigVersionHistory: (appId, envId, configKey) => api.get(`/config-items/app/${appId}/env/${envId}/key/${configKey}/version-history`),
+  // 回滚配置项到指定版本
+  rollbackConfigToVersion: (appId, envId, configKey, versionNumber, data) => api.post(`/config-items/app/${appId}/env/${envId}/key/${configKey}/rollback/${versionNumber}`, data)
+}
+
+// 配置版本管理API
+export const configVersionApi = {
+  // 创建配置版本
+  createVersion: (data) => api.post('/config-versions', data),
+  // 获取版本详情
+  getVersion: (id) => api.get(`/config-versions/${id}`),
+  // 获取应用环境的版本列表
+  getVersionsByAppAndEnv: (appId, envId) => api.get(`/config-versions/app/${appId}/env/${envId}`),
+  // 分页获取版本列表
+  getVersionsByAppAndEnvPage: (appId, envId, params) => api.get(`/config-versions/app/${appId}/env/${envId}/page`, { params }),
+  // 删除版本
+  deleteVersion: (id) => api.delete(`/config-versions/${id}`),
+  // 获取最新版本号
+  getLatestVersionNumber: (appId, envId) => api.get(`/config-versions/app/${appId}/env/${envId}/latest`),
+  // 生成新版本号
+  generateVersionNumber: (appId, envId) => api.get(`/config-versions/app/${appId}/env/${envId}/generate`),
+  // 创建版本并记录变更
+  createVersionWithChanges: (appId, envId, data) => api.post(`/config-versions/app/${appId}/env/${envId}/create-with-changes`, data),
+  // 回滚到指定版本
+  rollbackToVersion: (appId, envId, versionNumber, data) => api.post(`/config-versions/app/${appId}/env/${envId}/rollback/${versionNumber}`, data),
+  // 比较两个版本的差异
+  compareVersions: (appId, envId, version1, version2) => api.get(`/config-versions/app/${appId}/env/${envId}/compare`, { 
+    params: { version1, version2 } 
+  }),
+  // 获取版本的变更详情
+  getVersionChanges: (id) => api.get(`/config-versions/${id}/changes`),
+  // 获取配置项的变更历史
+  getConfigChangeHistory: (appId, envId, configKey) => api.get(`/config-versions/app/${appId}/env/${envId}/config/${configKey}/history`)
 }
 
 // 客户端API

@@ -106,9 +106,10 @@
             {{ formatDate(scope.row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="scope">
             <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+            <el-button size="small" type="info" @click="handleVersionHistory(scope.row)">版本</el-button>
             <el-button 
               size="small" 
               type="danger" 
@@ -321,6 +322,125 @@
       </template>
     </el-dialog>
 
+    <!-- 版本历史对话框 -->
+    <el-dialog
+      v-model="showVersionDialog"
+      :title="`配置项版本历史 - ${selectedConfigItem?.configKey}`"
+      width="1000px"
+    >
+      <div class="version-history-timeline">
+        <div v-if="versionHistory.length === 0" class="empty-state">
+          <el-empty description="暂无版本历史记录" />
+        </div>
+        
+        <div v-else class="timeline-container">
+          <div class="timeline">
+            <div 
+              v-for="(version, index) in versionHistory" 
+              :key="index" 
+              class="timeline-item"
+              :class="{ 'is-current': version.versionNumber === currentVersion }"
+            >
+              <!-- 时间线节点 -->
+              <div class="timeline-node">
+                <div class="node-icon" :class="getChangeTypeClass(version.changeType)">
+                  <el-icon>
+                    <component :is="getChangeTypeIcon(version.changeType)" />
+                  </el-icon>
+                </div>
+                <div class="node-line" v-if="index < versionHistory.length - 1"></div>
+              </div>
+
+              <!-- 版本内容卡片 -->
+              <div class="timeline-content">
+                <div class="version-card">
+                  <div class="version-header">
+                    <div class="version-info">
+                      <div class="version-number">
+                        <el-tag type="primary" size="large">{{ version.versionNumber }}</el-tag>
+                        <span v-if="version.versionNumber === currentVersion" class="current-badge">当前版本</span>
+                      </div>
+                      <div class="version-meta">
+                        <span class="version-name">{{ version.versionName }}</span>
+                        <el-tag :type="getChangeTypeColor(version.changeType)" size="small">
+                          {{ getChangeTypeName(version.changeType) }}
+                        </el-tag>
+                      </div>
+                    </div>
+                    <div class="version-actions">
+                      <el-button 
+                        size="small" 
+                        type="warning" 
+                        @click="handleRollback(version)"
+                        :disabled="version.versionNumber === currentVersion"
+                        text
+                      >
+                        <el-icon><RefreshLeft /></el-icon>
+                        回滚到此版本
+                      </el-button>
+                    </div>
+                  </div>
+
+                  <div class="version-body">
+                    <div class="version-desc">{{ version.versionDesc }}</div>
+                    
+                    <!-- 值变更对比 -->
+                    <div class="value-comparison">
+                      <div class="comparison-header">
+                        <span class="comparison-title">配置值变更</span>
+                      </div>
+                      <div class="comparison-content">
+                        <div class="old-value-section">
+                          <div class="value-label">原值：</div>
+                          <div class="value-content">
+                            <el-input
+                              v-model="version.oldValue"
+                              type="textarea"
+                              :rows="3"
+                              readonly
+                              placeholder="无"
+                            />
+                          </div>
+                        </div>
+                        <div class="arrow-icon">
+                          <el-icon><ArrowRight /></el-icon>
+                        </div>
+                        <div class="new-value-section">
+                          <div class="value-label">新值：</div>
+                          <div class="value-content">
+                            <el-input
+                              v-model="version.newValue"
+                              type="textarea"
+                              :rows="3"
+                              readonly
+                              placeholder="无"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="version-footer">
+                    <div class="version-author">
+                      <el-avatar :size="24" class="author-avatar">
+                        {{ version.createdBy?.charAt(0)?.toUpperCase() }}
+                      </el-avatar>
+                      <span class="author-name">{{ version.createdBy }}</span>
+                    </div>
+                    <div class="version-time">
+                      <el-icon><Clock /></el-icon>
+                      {{ formatDate(version.createdAt) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
     <!-- 配置编辑器对话框 -->
     <el-dialog
       v-model="showEditorDialog"
@@ -406,7 +526,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Upload, UploadFilled, Edit } from '@element-plus/icons-vue'
+import { Plus, Search, Upload, UploadFilled, Edit, RefreshLeft, Clock, ArrowRight } from '@element-plus/icons-vue'
 import { configApi, applicationApi, environmentApi } from '../api'
 import MonacoEditor from '../components/MonacoEditor.vue'
 import yaml from 'js-yaml'
@@ -425,7 +545,11 @@ const statusFilter = ref('')
 const showCreateDialog = ref(false)
 const showUploadDialog = ref(false)
 const showEditorDialog = ref(false)
+const showVersionDialog = ref(false)
 const editingConfig = ref(null)
+const selectedConfigItem = ref(null)
+const versionHistory = ref([])
+const currentVersion = ref('')
 const formRef = ref()
 const uploadFormRef = ref()
 const editorFormRef = ref()
@@ -643,14 +767,15 @@ const handleSubmit = async () => {
     const submitData = {
       ...form,
       isRequired: form.isRequired ? 1 : 0,
-      isEncrypted: form.isEncrypted ? 1 : 0
+      isEncrypted: form.isEncrypted ? 1 : 0,
+      createdBy: 'admin' // 这里应该从用户上下文获取
     }
     
     if (editingConfig.value) {
-      await configApi.updateConfig(editingConfig.value.id, submitData)
+      await configApi.updateConfigWithVersion(editingConfig.value.id, submitData)
       ElMessage.success('更新成功')
     } else {
-      await configApi.createConfig(submitData)
+      await configApi.createConfigWithVersion(submitData)
       ElMessage.success('创建成功')
     }
     
@@ -956,6 +1081,95 @@ const handleEditorSubmit = async () => {
   }
 }
 
+// 版本管理相关方法
+const handleVersionHistory = async (configItem) => {
+  try {
+    selectedConfigItem.value = configItem
+    currentVersion.value = configItem.versionNumber || ''
+    
+    const response = await configApi.getConfigVersionHistory(
+      configItem.appId, 
+      configItem.envId, 
+      configItem.configKey
+    )
+    
+    versionHistory.value = response.data || []
+    showVersionDialog.value = true
+  } catch (error) {
+    console.error('获取版本历史失败:', error)
+    ElMessage.error('获取版本历史失败')
+  }
+}
+
+const handleRollback = async (versionItem) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要回滚配置项 "${selectedConfigItem.value.configKey}" 到版本 "${versionItem.versionNumber}" 吗？`,
+      '确认回滚',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    await configApi.rollbackConfigToVersion(
+      selectedConfigItem.value.appId,
+      selectedConfigItem.value.envId,
+      selectedConfigItem.value.configKey,
+      versionItem.versionNumber,
+      { createdBy: 'admin' } // 这里应该从用户上下文获取
+    )
+    
+    ElMessage.success('回滚成功')
+    showVersionDialog.value = false
+    loadConfigs()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('回滚失败:', error)
+      ElMessage.error('回滚失败')
+    }
+  }
+}
+
+const getChangeTypeName = (type) => {
+  const types = {
+    1: '新增',
+    2: '修改',
+    3: '删除'
+  }
+  return types[type] || '未知'
+}
+
+const getChangeTypeColor = (type) => {
+  const colors = {
+    1: 'success',
+    2: 'warning',
+    3: 'danger'
+  }
+  return colors[type] || 'info'
+}
+
+// 获取变更类型图标
+const getChangeTypeIcon = (type) => {
+  const icons = {
+    1: 'Plus',
+    2: 'Edit',
+    3: 'Delete'
+  }
+  return icons[type] || 'InfoFilled'
+}
+
+// 获取变更类型CSS类
+const getChangeTypeClass = (type) => {
+  const classes = {
+    1: 'type-add',
+    2: 'type-edit',
+    3: 'type-delete'
+  }
+  return classes[type] || 'type-default'
+}
+
 onMounted(() => {
   loadConfigs()
   loadApplications()
@@ -983,5 +1197,262 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* 版本历史时间线样式 */
+.version-history-timeline {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 0;
+}
+
+.timeline-container {
+  position: relative;
+  padding: 20px 0;
+}
+
+.timeline {
+  position: relative;
+}
+
+.timeline-item {
+  display: flex;
+  margin-bottom: 30px;
+  position: relative;
+}
+
+.timeline-item.is-current .version-card {
+  border-color: #409eff;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
+}
+
+.timeline-node {
+  position: relative;
+  margin-right: 20px;
+  flex-shrink: 0;
+}
+
+.node-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 18px;
+  position: relative;
+  z-index: 2;
+}
+
+.node-icon.type-add {
+  background: linear-gradient(135deg, #67c23a, #85ce61);
+}
+
+.node-icon.type-edit {
+  background: linear-gradient(135deg, #e6a23c, #f0c78a);
+}
+
+.node-icon.type-delete {
+  background: linear-gradient(135deg, #f56c6c, #f78989);
+}
+
+.node-icon.type-default {
+  background: linear-gradient(135deg, #909399, #c0c4cc);
+}
+
+.node-line {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  width: 2px;
+  height: 30px;
+  background: linear-gradient(to bottom, #e4e7ed, transparent);
+  transform: translateX(-50%);
+}
+
+.timeline-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.version-card {
+  background: white;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  padding: 20px;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.version-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.version-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.version-info {
+  flex: 1;
+}
+
+.version-number {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.current-badge {
+  background: #67c23a;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.version-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.version-name {
+  font-weight: 500;
+  color: #303133;
+}
+
+.version-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.version-body {
+  margin-bottom: 15px;
+}
+
+.version-desc {
+  color: #606266;
+  margin-bottom: 15px;
+  line-height: 1.5;
+}
+
+.value-comparison {
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 15px;
+}
+
+.comparison-header {
+  margin-bottom: 15px;
+}
+
+.comparison-title {
+  font-weight: 500;
+  color: #303133;
+  font-size: 14px;
+}
+
+.comparison-content {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.old-value-section,
+.new-value-section {
+  flex: 1;
+}
+
+.value-label {
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: #606266;
+  font-size: 13px;
+}
+
+.value-content {
+  flex: 1;
+}
+
+.arrow-icon {
+  color: #409eff;
+  font-size: 20px;
+  margin: 0 10px;
+  flex-shrink: 0;
+}
+
+.version-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 15px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.version-author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.author-avatar {
+  background: #409eff;
+  color: white;
+  font-weight: 500;
+}
+
+.author-name {
+  color: #606266;
+  font-size: 14px;
+}
+
+.version-time {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #909399;
+  font-size: 13px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .timeline-item {
+    flex-direction: column;
+  }
+  
+  .timeline-node {
+    margin-right: 0;
+    margin-bottom: 15px;
+    align-self: center;
+  }
+  
+  .version-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .version-actions {
+    align-self: flex-end;
+  }
+  
+  .comparison-content {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .arrow-icon {
+    transform: rotate(90deg);
+  }
 }
 </style> 

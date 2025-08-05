@@ -196,6 +196,99 @@ public class ConfigItemController {
         }
     }
 
+    // ==================== 配置项版本管理API ====================
+
+    /**
+     * 创建配置项并自动生成版本
+     */
+    @PostMapping("/with-version")
+    public ApiResponse<ConfigItem> createConfigItemWithVersion(@RequestBody Map<String, Object> request) {
+        try {
+            ConfigItem configItem = new ConfigItem();
+            // 设置配置项属性
+            configItem.setAppId(Long.valueOf(request.get("appId").toString()));
+            configItem.setEnvId(Long.valueOf(request.get("envId").toString()));
+            configItem.setConfigKey((String) request.get("configKey"));
+            configItem.setConfigValue((String) request.get("configValue"));
+            configItem.setConfigType((Integer) request.get("configType"));
+            configItem.setIsEncrypted((Integer) request.get("isEncrypted"));
+            configItem.setIsRequired((Integer) request.get("isRequired"));
+            configItem.setDefaultValue((String) request.get("defaultValue"));
+            configItem.setDescription((String) request.get("description"));
+            configItem.setStatus((Integer) request.get("status"));
+            
+            String createdBy = (String) request.get("createdBy");
+            
+            ConfigItem created = configItemService.createConfigItemWithVersion(configItem, createdBy);
+            return ApiResponse.success("配置项创建成功", created);
+        } catch (Exception e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 更新配置项并自动生成版本
+     */
+    @PutMapping("/{id}/with-version")
+    public ApiResponse<ConfigItem> updateConfigItemWithVersion(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+        try {
+            ConfigItem configItem = new ConfigItem();
+            // 设置配置项属性
+            configItem.setAppId(Long.valueOf(request.get("appId").toString()));
+            configItem.setEnvId(Long.valueOf(request.get("envId").toString()));
+            configItem.setConfigKey((String) request.get("configKey"));
+            configItem.setConfigValue((String) request.get("configValue"));
+            configItem.setConfigType((Integer) request.get("configType"));
+            configItem.setIsEncrypted((Integer) request.get("isEncrypted"));
+            configItem.setIsRequired((Integer) request.get("isRequired"));
+            configItem.setDefaultValue((String) request.get("defaultValue"));
+            configItem.setDescription((String) request.get("description"));
+            configItem.setStatus((Integer) request.get("status"));
+            
+            String createdBy = (String) request.get("createdBy");
+            
+            ConfigItem updated = configItemService.updateConfigItemWithVersion(id, configItem, createdBy);
+            return ApiResponse.success("配置项更新成功", updated);
+        } catch (Exception e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 获取配置项的版本历史
+     */
+    @GetMapping("/app/{appId}/env/{envId}/key/{configKey}/version-history")
+    public ApiResponse<List<Map<String, Object>>> getConfigItemVersionHistory(
+            @PathVariable Long appId,
+            @PathVariable Long envId,
+            @PathVariable String configKey) {
+        try {
+            List<Map<String, Object>> history = configItemService.getConfigItemVersionHistory(appId, envId, configKey);
+            return ApiResponse.success(history);
+        } catch (Exception e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 回滚配置项到指定版本
+     */
+    @PostMapping("/app/{appId}/env/{envId}/key/{configKey}/rollback/{versionNumber}")
+    public ApiResponse<ConfigItem> rollbackConfigItemToVersion(
+            @PathVariable Long appId,
+            @PathVariable Long envId,
+            @PathVariable String configKey,
+            @PathVariable String versionNumber,
+            @RequestBody Map<String, String> request) {
+        try {
+            String createdBy = request.get("createdBy");
+            ConfigItem rolledBack = configItemService.rollbackConfigItemToVersion(appId, envId, configKey, versionNumber, createdBy);
+            return ApiResponse.success("回滚成功", rolledBack);
+        } catch (Exception e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
     /**
      * 分页查询配置项
      */
@@ -208,9 +301,42 @@ public class ConfigItemController {
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") Integer status) {
         try {
-            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "configKey"));
-            Page<ConfigItem> configItems = configItemService.findConfigItems(appId, envId, keyword, status, pageable);
-            System.out.println(configItems);
+            // 获取所有配置项列表（从缓存）
+            List<ConfigItem> allConfigItems = configItemService.findAllConfigItems();
+            
+            // 根据appId和envId过滤
+            List<ConfigItem> filteredConfigs = allConfigItems.stream()
+                    .filter(config -> {
+                        // 如果指定了appId，则过滤
+                        if (appId != null && !appId.equals(config.getAppId())) {
+                            return false;
+                        }
+                        // 如果指定了envId，则过滤
+                        if (envId != null && !envId.equals(config.getEnvId())) {
+                            return false;
+                        }
+                        // 如果指定了keyword，则过滤
+                        if (keyword != null && !keyword.isEmpty()) {
+                            return config.getConfigKey().toLowerCase().contains(keyword.toLowerCase()) ||
+                                   (config.getConfigValue() != null && config.getConfigValue().toLowerCase().contains(keyword.toLowerCase()));
+                        }
+                        return true;
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+            
+            // 手动分页
+            int start = page * size;
+            int end = Math.min(start + size, filteredConfigs.size());
+            
+            List<ConfigItem> pageContent = filteredConfigs.subList(start, end);
+            
+            // 创建Page对象
+            Page<ConfigItem> configItems = new org.springframework.data.domain.PageImpl<>(
+                    pageContent, 
+                    PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "configKey")), 
+                    filteredConfigs.size()
+            );
+            
             return ApiResponse.success(configItems);
         } catch (Exception e) {
             return ApiResponse.error(e.getMessage());

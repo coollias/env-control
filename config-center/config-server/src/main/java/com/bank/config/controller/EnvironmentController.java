@@ -101,8 +101,22 @@ public class EnvironmentController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "1") Integer status) {
         try {
-            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "sortOrder"));
-            Page<Environment> environments = environmentService.findEnvironments(status, pageable);
+            // 获取所有环境列表（从缓存）
+            List<Environment> allEnvironments = environmentService.findAllEnvironments();
+            
+            // 手动分页
+            int start = page * size;
+            int end = Math.min(start + size, allEnvironments.size());
+            
+            List<Environment> pageContent = allEnvironments.subList(start, end);
+            
+            // 创建Page对象
+            Page<Environment> environments = new org.springframework.data.domain.PageImpl<>(
+                    pageContent, 
+                    PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "sortOrder")), 
+                    allEnvironments.size()
+            );
+            
             return ApiResponse.success(environments);
         } catch (Exception e) {
             return ApiResponse.error(e.getMessage());

@@ -63,4 +63,9 @@ public interface EnvironmentService {
      * 统计启用的环境数量
      */
     long countAllEnabled();
+
+    /**
+     * 获取所有环境列表（用于下拉选择等）
+     */
+    List<Environment> findAllEnvironments();
 } 

@@ -92,4 +92,9 @@ public interface ApplicationService {
      * 检查用户是否是应用的创建者
      */
     boolean isAppCreator(Long userId, Long appId);
+
+    /**
+     * 测试缓存方法
+     */
+    String testCache(Long id);
 }
