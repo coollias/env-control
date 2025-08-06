@@ -1,0 +1,15 @@
+---
+configs:
+  database:
+    pool:
+      minConnections: "7"
+      timeout: "30001"
+    url: "jdbc:mysql://localhost:3306/myapp"
+    username: "root"
+  redis:
+    database: "0"
+    password: ""
+    port: "6379"
+    host: "localhost"
+    timeout: "2000"
+lastUpdateTime: "2025-08-06T16:02:51.772"

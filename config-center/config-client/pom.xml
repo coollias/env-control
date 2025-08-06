@@ -85,4 +85,20 @@
             </plugin>
         </plugins>
     </build>
+    <distributionManagement>
+        <!-- 正式版本仓库 -->
+        <repository>
+            <id>repo-wdhtu</id> <!-- 仓库ID，需与 settings.xml 中的 server.id 一致 -->
+            <name>Aliyun Private Repository</name>
+            <url>https://packages.aliyun.com/6892eee0e5ba87aaf50064a8/maven/repo-wdhtu</url>
+        </repository>
+
+
+        <!-- 若需要发布快照版本，添加快照仓库（地址可能不同，需确认） -->
+        <snapshotRepository>
+            <id>repo-wdhtu</id>
+            <name>Aliyun Private Snapshot Repository</name>
+            <url>https://packages.aliyun.com/6892eee0e5ba87aaf50064a8/maven/repo-wdhtu-snapshots</url> <!-- 替换为实际快照仓库地址 -->
+        </snapshotRepository>
+    </distributionManagement>
 </project> 

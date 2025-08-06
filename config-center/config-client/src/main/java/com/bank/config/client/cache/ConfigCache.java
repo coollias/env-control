@@ -361,6 +361,13 @@ public class ConfigCache {
     public String getVersion() {
         return version;
     }
+    
+    /**
+     * 获取缓存文件路径
+     */
+    public String getCacheFile() {
+        return cacheFile;
+    }
 
     /**
      * 缓存数据类
