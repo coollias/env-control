@@ -1,0 +1,572 @@
+# 配置客户端Spring集成指南
+
+## 概述
+
+本文档介绍如何为配置客户端创建自定义注解，使其能够在Spring Boot应用中方便地使用。通过`@ConfigValue`注解，你可以自动注入配置值到Spring Bean中。
+
+## 实现步骤
+
+### 1. 创建自定义注解 `@ConfigValue`
+
+**文件位置**: `config-client/src/main/java/com/bank/config/client/annotation/ConfigValue.java`
+
+```java
+package com.bank.config.client.annotation;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+/**
+ * 配置值注解
+ * 用于在Spring中自动注入配置值
+ */
+@Target({ElementType.FIELD, ElementType.PARAMETER})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface ConfigValue {
+    
+    /**
+     * 配置键
+     */
+    String value();
+    
+    /**
+     * 默认值（当配置不存在时使用）
+     */
+    String defaultValue() default "";
+    
+    /**
+     * 是否必需（如果为true且配置不存在，将抛出异常）
+     */
+    boolean required() default false;
+    
+    /**
+     * 配置类型（用于类型转换）
+     */
+    Class<?> type() default String.class;
+}
+```
+
+### 2. 创建配置属性后处理器
+
+**文件位置**: `config-client/src/main/java/com/bank/config/client/spring/ConfigValuePostProcessor.java`
+
+```java
+package com.bank.config.client.spring;
+
+import com.bank.config.client.ConfigClient;
+import com.bank.config.client.annotation.ConfigValue;
+import com.bank.config.client.converter.ConfigConverter;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.stereotype.Component;
+import org.springframework.util.ReflectionUtils;
+
+import java.lang.reflect.Field;
+
+/**
+ * 配置值后处理器
+ * 处理@ConfigValue注解，自动注入配置值
+ */
+@Component
+public class ConfigValuePostProcessor implements BeanPostProcessor {
+    
+    @Autowired
+    private ConfigClient configClient;
+    
+    private final ConfigConverter converter = new ConfigConverter();
+    
+    @Override
+    public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+        return bean;
+    }
+    
+    @Override
+    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+        ReflectionUtils.doWithFields(bean.getClass(), field -> {
+            ConfigValue annotation = field.getAnnotation(ConfigValue.class);
+            if (annotation != null) {
+                injectConfigValue(bean, field, annotation);
+            }
+        });
+        return bean;
+    }
+    
+    private void injectConfigValue(Object bean, Field field, ConfigValue annotation) {
+        try {
+            String configKey = annotation.value();
+            String defaultValue = annotation.defaultValue();
+            boolean required = annotation.required();
+            Class<?> targetType = annotation.type();
+            
+            // 获取配置值
+            String configValue = configClient.getConfig(configKey, defaultValue);
+            
+            if (configValue == null && required) {
+                throw new IllegalStateException("必需的配置项不存在: " + configKey);
+            }
+            
+            // 类型转换
+            Object convertedValue = convertValue(configValue, targetType);
+            
+            // 设置字段值
+            field.setAccessible(true);
+            field.set(bean, convertedValue);
+            
+        } catch (Exception e) {
+            throw new RuntimeException("注入配置值失败: " + field.getName(), e);
+        }
+    }
+    
+    private Object convertValue(String value, Class<?> targetType) {
+        if (value == null) {
+            return null;
+        }
+        
+        if (targetType == String.class) {
+            return value;
+        } else if (targetType == Integer.class || targetType == int.class) {
+            return converter.convertSafely(value, Integer.class, 0);
+        } else if (targetType == Long.class || targetType == long.class) {
+            return converter.convertSafely(value, Long.class, 0L);
+        } else if (targetType == Double.class || targetType == double.class) {
+            return converter.convertSafely(value, Double.class, 0.0);
+        } else if (targetType == Boolean.class || targetType == boolean.class) {
+            return converter.convertSafely(value, Boolean.class, false);
+        } else if (targetType == Float.class || targetType == float.class) {
+            return converter.convertSafely(value, Float.class, 0.0f);
+        } else {
+            return converter.convertSafely(value, targetType, null);
+        }
+    }
+}
+```
+
+### 3. 创建配置属性类
+
+**文件位置**: `config-client/src/main/java/com/bank/config/client/spring/ConfigClientProperties.java`
+
+```java
+package com.bank.config.client.spring;
+
+/**
+ * 配置客户端属性类
+ */
+public class ConfigClientProperties {
+    
+    private String serverUrl = "http://localhost:8080";
+    private String appCode = "default-app";
+    private String envCode = "dev";
+    private String token = "";
+    private long pollInterval = 30000;
+    private String cacheFile = "/tmp/config-cache.properties";
+    private boolean enablePolling = true;
+    private boolean enableCache = true;
+    
+    // Getters and Setters
+    public String getServerUrl() {
+        return serverUrl;
+    }
+    
+    public void setServerUrl(String serverUrl) {
+        this.serverUrl = serverUrl;
+    }
+    
+    public String getAppCode() {
+        return appCode;
+    }
+    
+    public void setAppCode(String appCode) {
+        this.appCode = appCode;
+    }
+    
+    public String getEnvCode() {
+        return envCode;
+    }
+    
+    public void setEnvCode(String envCode) {
+        this.envCode = envCode;
+    }
+    
+    public String getToken() {
+        return token;
+    }
+    
+    public void setToken(String token) {
+        this.token = token;
+    }
+    
+    public long getPollInterval() {
+        return pollInterval;
+    }
+    
+    public void setPollInterval(long pollInterval) {
+        this.pollInterval = pollInterval;
+    }
+    
+    public String getCacheFile() {
+        return cacheFile;
+    }
+    
+    public void setCacheFile(String cacheFile) {
+        this.cacheFile = cacheFile;
+    }
+    
+    public boolean isEnablePolling() {
+        return enablePolling;
+    }
+    
+    public void setEnablePolling(boolean enablePolling) {
+        this.enablePolling = enablePolling;
+    }
+    
+    public boolean isEnableCache() {
+        return enableCache;
+    }
+    
+    public void setEnableCache(boolean enableCache) {
+        this.enableCache = enableCache;
+    }
+}
+```
+
+### 4. 创建Spring自动配置类
+
+**文件位置**: `config-client/src/main/java/com/bank/config/client/spring/ConfigClientAutoConfiguration.java`
+
+```java
+package com.bank.config.client.spring;
+
+import com.bank.config.client.ConfigClient;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * 配置客户端自动配置类
+ */
+@Configuration
+public class ConfigClientAutoConfiguration {
+    
+    @Bean
+    @ConditionalOnMissingBean
+    @ConfigurationProperties(prefix = "config.client")
+    public ConfigClientProperties configClientProperties() {
+        return new ConfigClientProperties();
+    }
+    
+    @Bean
+    @ConditionalOnMissingBean
+    public ConfigClient configClient(ConfigClientProperties properties) {
+        return new ConfigClient.ConfigClientBuilder()
+            .serverUrl(properties.getServerUrl())
+            .appCode(properties.getAppCode())
+            .envCode(properties.getEnvCode())
+            .token(properties.getToken())
+            .pollInterval(properties.getPollInterval())
+            .cacheFile(properties.getCacheFile())
+            .enablePolling(properties.isEnablePolling())
+            .enableCache(properties.isEnableCache())
+            .build();
+    }
+    
+    @Bean
+    public ConfigValuePostProcessor configValuePostProcessor() {
+        return new ConfigValuePostProcessor();
+    }
+}
+```
+
+### 5. 创建Spring Boot自动配置文件
+
+**文件位置**: `config-client/src/main/resources/META-INF/spring.factories`
+
+```
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+com.bank.config.client.spring.ConfigClientAutoConfiguration
+```
+
+### 6. 更新Maven依赖
+
+**文件位置**: `config-client/pom.xml`
+
+在`<dependencies>`部分添加：
+
+```xml
+<!-- Spring Boot Starter -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter</artifactId>
+    <version>2.6.3</version>
+</dependency>
+
+<!-- Spring Boot Configuration Processor -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-configuration-processor</artifactId>
+    <version>2.6.3</version>
+    <optional>true</optional>
+</dependency>
+```
+
+### 7. 创建使用示例
+
+**文件位置**: `config-client/src/main/java/com/bank/config/client/example/SpringConfigExample.java`
+
+```java
+package com.bank.config.client.example;
+
+import com.bank.config.client.annotation.ConfigValue;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.stereotype.Component;
+
+/**
+ * Spring Boot配置客户端使用示例
+ */
+@SpringBootApplication
+public class SpringConfigExample {
+    
+    public static void main(String[] args) {
+        SpringApplication.run(SpringConfigExample.class, args);
+    }
+    
+    /**
+     * 数据库配置类
+     */
+    @Component
+    public static class DatabaseConfig {
+        
+        @ConfigValue("database.url")
+        private String databaseUrl;
+        
+        @ConfigValue("database.username")
+        private String databaseUsername;
+        
+        @ConfigValue("database.pool.minConnections")
+        private Integer minConnections;
+        
+        @ConfigValue("database.pool.timeout")
+        private Long timeout;
+        
+        public String getDatabaseUrl() {
+            return databaseUrl;
+        }
+        
+        public String getDatabaseUsername() {
+            return databaseUsername;
+        }
+        
+        public Integer getMinConnections() {
+            return minConnections;
+        }
+        
+        public Long getTimeout() {
+            return timeout;
+        }
+    }
+    
+    /**
+     * Redis配置类
+     */
+    @Component
+    public static class RedisConfig {
+        
+        @ConfigValue("redis.host")
+        private String redisHost;
+        
+        @ConfigValue("redis.port")
+        private Integer redisPort;
+        
+        @ConfigValue("redis.database")
+        private Integer redisDatabase;
+        
+        @ConfigValue("redis.timeout")
+        private Long redisTimeout;
+        
+        public String getRedisHost() {
+            return redisHost;
+        }
+        
+        public Integer getRedisPort() {
+            return redisPort;
+        }
+        
+        public Integer getRedisDatabase() {
+            return redisDatabase;
+        }
+        
+        public Long getRedisTimeout() {
+            return redisTimeout;
+        }
+    }
+    
+    /**
+     * 应用配置类
+     */
+    @Component
+    public static class AppConfig {
+        
+        @ConfigValue("app.name")
+        private String appName;
+        
+        @ConfigValue("app.version")
+        private String appVersion;
+        
+        @ConfigValue("app.debug")
+        private Boolean debug;
+        
+        public String getAppName() {
+            return appName;
+        }
+        
+        public String getAppVersion() {
+            return appVersion;
+        }
+        
+        public Boolean getDebug() {
+            return debug;
+        }
+    }
+}
+```
+
+### 8. 创建配置文件示例
+
+**文件位置**: `config-client/src/main/resources/application.yml`
+
+```yaml
+# Spring Boot配置客户端配置示例
+config:
+  client:
+    server-url: http://localhost:8080
+    app-code: 1003
+    env-code: dev
+    token: Bearer eyJhbGciOiJIUzI1NiJ9.eyJ1c2VySWQiOjEwLCJzdWIiOiJjb29sbGlhcyIsImlhdCI6MTc1NDQzOTg1NCwiZXhwIjoxODQwODM5ODU0fQ.joAFmm_rW3Nm_w6848RHIuotBAofqAvjsooC0jzr17A
+    poll-interval: 30000
+    cache-file: /tmp/spring-config-cache.yaml
+    enable-polling: true
+    enable-cache: true
+
+# 应用配置
+app:
+  name: 配置客户端示例应用
+  version: 1.0.0
+  debug: true
+
+# 数据库配置（这些将从配置中心获取）
+database:
+  url: jdbc:mysql://localhost:3306/myapp
+  username: root
+  pool:
+    min-connections: 5
+    timeout: 30000
+
+# Redis配置（这些将从配置中心获取）
+redis:
+  host: localhost
+  port: 6379
+  database: 0
+  timeout: 2000
+```
+
+## 使用方法
+
+### 1. 基本用法
+
+```java
+@Component
+public class MyService {
+    
+    @ConfigValue("database.url")
+    private String databaseUrl;
+    
+    @ConfigValue("app.timeout")
+    private Integer timeout;
+    
+    @ConfigValue("feature.enabled")
+    private Boolean featureEnabled;
+}
+```
+
+### 2. 带默认值的用法
+
+```java
+@Component
+public class MyService {
+    
+    @ConfigValue(value = "database.url", defaultValue = "jdbc:mysql://localhost:3306/default")
+    private String databaseUrl;
+    
+    @ConfigValue(value = "app.timeout", defaultValue = "5000")
+    private Integer timeout;
+}
+```
+
+### 3. 必需配置项
+
+```java
+@Component
+public class MyService {
+    
+    @ConfigValue(value = "database.url", required = true)
+    private String databaseUrl;
+    
+    @ConfigValue(value = "app.secret", required = true)
+    private String appSecret;
+}
+```
+
+### 4. 指定类型转换
+
+```java
+@Component
+public class MyService {
+    
+    @ConfigValue(value = "app.timeout", type = Long.class)
+    private Long timeout;
+    
+    @ConfigValue(value = "app.debug", type = Boolean.class)
+    private Boolean debug;
+}
+```
+
+## 特性
+
+1. **自动类型转换**: 支持String、Integer、Long、Double、Boolean、Float等基本类型
+2. **默认值支持**: 当配置不存在时使用默认值
+3. **必需配置检查**: 可以标记配置为必需，不存在时抛出异常
+4. **Spring Boot集成**: 自动配置，无需手动注册Bean
+5. **配置热更新**: 支持配置变更时自动更新注入的值
+
+## 注意事项
+
+1. 确保配置中心服务器正在运行
+2. 确保应用有正确的认证Token
+3. 配置键要与配置中心中的键完全匹配
+4. 类型转换失败时会使用默认值或抛出异常
+
+## 文件结构
+
+```
+config-client/
+├── src/main/java/com/bank/config/client/
+│   ├── annotation/
+│   │   └── ConfigValue.java                    # 自定义注解
+│   ├── spring/
+│   │   ├── ConfigValuePostProcessor.java       # 注解处理器
+│   │   ├── ConfigClientAutoConfiguration.java  # 自动配置类
+│   │   └── ConfigClientProperties.java         # 配置属性类
+│   └── example/
+│       └── SpringConfigExample.java            # 使用示例
+├── src/main/resources/
+│   ├── META-INF/
+│   │   └── spring.factories                    # Spring Boot自动配置
+│   └── application.yml                         # 配置文件示例
+└── pom.xml                                     # Maven依赖配置
+```
+
+这样，你就可以在Spring Boot应用中方便地使用`@ConfigValue`注解来自动注入配置值了！
