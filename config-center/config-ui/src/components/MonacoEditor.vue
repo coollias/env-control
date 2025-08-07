@@ -6,6 +6,21 @@
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import * as monaco from 'monaco-editor'
 
+// 配置Monaco Editor的Web Worker
+if (typeof window !== 'undefined') {
+  window.MonacoEnvironment = {
+    getWorker: function (moduleId, label) {
+      // 禁用Web Worker，在主线程中运行
+      return {
+        postMessage: function () {},
+        addEventListener: function () {},
+        removeEventListener: function () {},
+        terminate: function () {}
+      }
+    }
+  }
+}
+
 const props = defineProps({
   modelValue: {
     type: String,

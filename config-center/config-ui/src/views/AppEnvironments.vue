@@ -67,6 +67,9 @@
                 <el-button size="small" type="primary" @click.stop="viewConfig(app, env)">
                   查看配置
                 </el-button>
+                <el-button size="small" type="warning" @click.stop="viewVersionDiff(app, env)">
+                  版本对比
+                </el-button>
               </div>
             </div>
           </div>
@@ -166,6 +169,59 @@
         </div>
       </div>
     </el-dialog>
+
+    <!-- 版本对比对话框 -->
+    <el-dialog
+      v-model="showVersionDiffDialog"
+      :title="`${selectedAppInfo?.appName} - ${selectedEnvInfo?.envName} 版本对比`"
+      width="90%"
+      top="3vh"
+      class="version-diff-dialog"
+    >
+      <div class="version-diff-container">
+        <!-- 版本选择器 -->
+        <div class="version-selector">
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="版本1">
+                <el-select v-model="diffForm.version1" placeholder="选择版本1" @change="loadVersionDiff">
+                  <el-option
+                    v-for="version in versions"
+                    :key="version.versionNumber"
+                    :label="`${version.versionNumber} - ${version.versionName}`"
+                    :value="version.versionNumber"
+                  />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="版本2">
+                <el-select v-model="diffForm.version2" placeholder="选择版本2" @change="loadVersionDiff">
+                  <el-option
+                    v-for="version in versions"
+                    :key="version.versionNumber"
+                    :label="`${version.versionNumber} - ${version.versionName}`"
+                    :value="version.versionNumber"
+                  />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
+
+        <!-- Diff组件 -->
+        <div class="diff-container">
+          <GitStyleDiff
+            v-if="showVersionDiffDialog && diffForm.version1 && diffForm.version2"
+            :version1="diffForm.version1"
+            :version2="diffForm.version2"
+            :diff-data="diffResult"
+            :loading="diffLoading"
+            @refresh="loadVersionDiff"
+          />
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -173,8 +229,9 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Setting, Refresh, CopyDocument, Download, ArrowRight } from '@element-plus/icons-vue'
-import { applicationApi, environmentApi, configApi } from '../api'
+import { applicationApi, environmentApi, configApi, configVersionApi } from '../api'
 import MonacoEditor from '../components/MonacoEditor.vue'
+import GitStyleDiff from '../components/GitStyleDiff.vue'
 
 const loading = ref(false)
 const refreshing = ref(false)
@@ -189,6 +246,14 @@ const configContent = ref('')
 const selectedAppInfo = ref(null)
 const selectedEnvInfo = ref(null)
 const inheritanceChain = ref([])
+const showVersionDiffDialog = ref(false)
+const versions = ref([])
+const diffForm = reactive({
+  version1: '',
+  version2: ''
+})
+const diffResult = ref({})
+const diffLoading = ref(false)
 
 const configStats = reactive({
   totalItems: 0,
@@ -285,6 +350,58 @@ const viewConfig = async (app, env) => {
   showConfigDialog.value = true
   await loadConfigContent(app.id, env.id)
   await loadInheritanceChain(app.id, env.id)
+}
+
+// 查看版本对比
+const viewVersionDiff = async (app, env) => {
+  selectedAppInfo.value = app
+  selectedEnvInfo.value = env
+  showVersionDiffDialog.value = true
+  await loadVersions(app.id, env.id)
+}
+
+// 加载版本列表
+const loadVersions = async (appId, envId) => {
+  try {
+    const response = await configVersionApi.getVersionsByAppAndEnv(appId, envId)
+    versions.value = response.data || []
+    
+    // 如果有版本，默认选择最新的两个版本进行对比
+    if (versions.value.length >= 2) {
+      diffForm.version1 = versions.value[1].versionNumber
+      diffForm.version2 = versions.value[0].versionNumber
+      await loadVersionDiff()
+    } else if (versions.value.length === 1) {
+      diffForm.version2 = versions.value[0].versionNumber
+    }
+  } catch (error) {
+    console.error('加载版本列表失败:', error)
+    ElMessage.error('加载版本列表失败')
+  }
+}
+
+// 加载版本差异
+const loadVersionDiff = async () => {
+  if (!diffForm.version1 || !diffForm.version2 || !selectedAppInfo.value || !selectedEnvInfo.value) {
+    return
+  }
+  
+  try {
+    diffLoading.value = true
+    const response = await configVersionApi.compareVersions(
+      selectedAppInfo.value.id,
+      selectedEnvInfo.value.id,
+      diffForm.version1,
+      diffForm.version2
+    )
+    diffResult.value = response.data.differences || {}
+  } catch (error) {
+    console.error('加载版本差异失败:', error)
+    ElMessage.error('加载版本差异失败')
+    diffResult.value = {}
+  } finally {
+    diffLoading.value = false
+  }
 }
 
 // 加载环境继承链
@@ -677,5 +794,30 @@ onMounted(() => {
   margin-top: 15px;
   padding-top: 15px;
   border-top: 1px solid #e4e7ed;
+}
+
+/* 版本对比对话框样式 */
+.version-diff-dialog {
+  .el-dialog__body {
+    padding: 0;
+  }
+}
+
+.version-diff-container {
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.version-selector {
+  padding: 20px;
+  border-bottom: 1px solid #e4e7ed;
+  background: #fafafa;
+}
+
+.diff-container {
+  flex: 1;
+  overflow: hidden;
+  padding: 0;
 }
 </style> 
