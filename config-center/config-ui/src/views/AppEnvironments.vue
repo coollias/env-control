@@ -105,6 +105,14 @@
               <el-icon><Download /></el-icon>
               下载
             </el-button>
+            <el-button @click="stageConfig" type="primary">
+              <el-icon><DocumentAdd /></el-icon>
+              暂存配置
+            </el-button>
+            <el-button @click="publishConfig" type="success">
+              <el-icon><Upload /></el-icon>
+              发布配置
+            </el-button>
           </div>
         </div>
 
@@ -154,16 +162,19 @@
         <div class="config-stats">
           <el-row :gutter="20">
             <el-col :span="6">
-              <el-statistic title="配置项总数" :value="configStats.totalItems" />
-            </el-col>
-            <el-col :span="6">
-              <el-statistic title="加密配置" :value="configStats.encryptedItems" />
-            </el-col>
-            <el-col :span="6">
-              <el-statistic title="必填配置" :value="configStats.requiredItems" />
-            </el-col>
-            <el-col :span="6">
-              <el-statistic title="最后更新" :value="configStats.lastUpdated" />
+                              <el-statistic title="配置项总数" :value="configStats.totalItems" />
+              </el-col>
+              <el-col :span="6">
+                <el-statistic title="加密配置" :value="configStats.encryptedItems" />
+              </el-col>
+              <el-col :span="6">
+                <el-statistic title="必填配置" :value="configStats.requiredItems" />
+              </el-col>
+              <el-col :span="6">
+                <el-statistic title="最后更新" :value="configStats.lastUpdated ? 1 : 0" />
+                <div style="margin-top: 8px; font-size: 12px; color: #666;">
+                  {{ configStats.lastUpdated || '暂无' }}
+                </div>
             </el-col>
           </el-row>
         </div>
@@ -222,14 +233,111 @@
         </div>
       </div>
     </el-dialog>
+
+    <!-- 暂存配置对话框 -->
+    <el-dialog
+      v-model="showStageDialog"
+      title="暂存配置"
+      width="60%"
+      top="5vh"
+    >
+              <el-form :model="stageForm" :rules="stageRules" ref="stageFormRef" label-width="100px">
+        <el-form-item label="快照名称" prop="snapshotName">
+          <el-input v-model="stageForm.snapshotName" placeholder="请输入快照名称"></el-input>
+        </el-form-item>
+        <el-form-item label="快照描述" prop="snapshotDesc">
+          <el-input 
+            type="textarea" 
+            v-model="stageForm.snapshotDesc" 
+            placeholder="请输入快照描述"
+            :rows="3">
+          </el-input>
+        </el-form-item>
+        <el-form-item label="配置数据">
+          <div class="config-preview">
+            <el-alert
+              title="当前配置预览"
+              type="info"
+              :closable="false"
+              show-icon
+            >
+              <template #default>
+                <div class="config-summary">
+                  <p>应用：{{ selectedAppInfo?.appName }}</p>
+                  <p>环境：{{ selectedEnvInfo?.envName }}</p>
+                  <p>配置项数量：{{ configStats.totalItems }}</p>
+                  <p>格式：{{ selectedFormat.toUpperCase() }}</p>
+                </div>
+              </template>
+            </el-alert>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showStageDialog = false">取消</el-button>
+          <el-button type="primary" @click="confirmStageConfig" :loading="stagingLoading">
+            暂存配置
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 发布配置对话框 -->
+    <el-dialog
+      v-model="showPublishDialog"
+      title="发布配置"
+      width="50%"
+      top="5vh"
+    >
+              <el-form :model="publishForm" ref="publishFormRef" label-width="100px">
+        <el-form-item label="选择快照">
+          <el-select v-model="publishForm.snapshotId" placeholder="请选择要发布的快照">
+            <el-option
+              v-for="snapshot in stagedSnapshots"
+              :key="snapshot.id"
+              :label="`${snapshot.snapshotName} (${snapshot.versionNumber})`"
+              :value="snapshot.id">
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="发布人" prop="publishedBy">
+          <el-input v-model="publishForm.publishedBy" placeholder="请输入发布人"></el-input>
+        </el-form-item>
+        <el-form-item label="推送方式">
+          <el-radio-group v-model="publishForm.pushType">
+            <el-radio label="all">推送到所有客户端</el-radio>
+            <el-radio label="specific">推送到指定实例</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="目标实例" v-if="publishForm.pushType === 'specific'">
+          <el-select v-model="publishForm.targetInstances" multiple placeholder="请选择目标实例">
+            <el-option
+              v-for="client in onlineClients"
+              :key="client.instanceId"
+              :label="`${client.instanceId} (${client.instanceIp})`"
+              :value="client.instanceId">
+            </el-option>
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showPublishDialog = false">取消</el-button>
+          <el-button type="primary" @click="confirmPublishConfig" :loading="publishingLoading">
+            发布配置
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Setting, Refresh, CopyDocument, Download, ArrowRight } from '@element-plus/icons-vue'
-import { applicationApi, environmentApi, configApi, configVersionApi } from '../api'
+import { applicationApi, environmentApi, configApi, configVersionApi, configSnapshotApi, configPushApi } from '../api'
 import MonacoEditor from '../components/MonacoEditor.vue'
 import GitStyleDiff from '../components/GitStyleDiff.vue'
 
@@ -254,6 +362,34 @@ const diffForm = reactive({
 })
 const diffResult = ref({})
 const diffLoading = ref(false)
+
+// 暂存和发布相关数据
+const showStageDialog = ref(false)
+const showPublishDialog = ref(false)
+const stagingLoading = ref(false)
+const publishingLoading = ref(false)
+const stagedSnapshots = ref([])
+const onlineClients = ref([])
+const stageFormRef = ref()
+const publishFormRef = ref()
+
+const stageForm = reactive({
+  snapshotName: '',
+  snapshotDesc: ''
+})
+
+const publishForm = reactive({
+  snapshotId: null,
+  publishedBy: '',
+  pushType: 'all',
+  targetInstances: []
+})
+
+const stageRules = {
+  snapshotName: [
+    { required: true, message: '请输入快照名称', trigger: 'input' }
+  ]
+}
 
 const configStats = reactive({
   totalItems: 0,
@@ -436,7 +572,7 @@ const loadConfigContent = async (appId, envId) => {
     configStats.encryptedItems = configItems.filter(item => item.isEncrypted === 1).length
     configStats.requiredItems = configItems.filter(item => item.isRequired === 1).length
     configStats.lastUpdated = configItems.length > 0 
-      ? new Date(Math.max(...configItems.map(item => new Date(item.updatedAt || item.createdAt))))
+      ? new Date(Math.max(...configItems.map(item => new Date(item.updatedAt || item.createdAt)))).toLocaleString()
       : '暂无数据'
     
     // 根据选择的格式生成配置内容
@@ -627,6 +763,222 @@ const downloadConfig = () => {
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
   ElMessage.success('配置文件已下载')
+}
+
+// 暂存配置
+const stageConfig = () => {
+  if (!selectedAppInfo.value || !selectedEnvInfo.value) {
+    ElMessage.warning('请先选择应用和环境')
+    return
+  }
+  
+  // 设置默认快照名称
+  stageForm.snapshotName = `${selectedAppInfo.value.appName}-${selectedEnvInfo.value.envName}-${new Date().toLocaleDateString()}`
+  stageForm.snapshotDesc = `${selectedAppInfo.value.appName} ${selectedEnvInfo.value.envName} 环境配置暂存`
+  
+  console.log('设置表单值:', stageForm.snapshotName, stageForm.snapshotDesc)
+  showStageDialog.value = true
+}
+
+// 发布配置
+const publishConfig = async () => {
+  if (!selectedAppInfo.value || !selectedEnvInfo.value) {
+    ElMessage.warning('请先选择应用和环境')
+    return
+  }
+  
+  try {
+    // 加载暂存快照列表
+    const response = await configSnapshotApi.getSnapshotsByAppAndEnv(
+      selectedAppInfo.value.id, 
+      selectedEnvInfo.value.id
+    )
+    stagedSnapshots.value = response.data.filter(s => s.snapshotType === 1)
+    
+    if (stagedSnapshots.value.length === 0) {
+      ElMessage.warning('没有找到暂存快照，请先暂存配置')
+      return
+    }
+    
+    // 加载在线客户端
+    await loadOnlineClients()
+    
+    showPublishDialog.value = true
+  } catch (error) {
+    ElMessage.error('加载快照列表失败')
+  }
+}
+
+// 确认暂存配置
+const confirmStageConfig = async () => {
+  try {
+    stagingLoading.value = true
+    
+    // 将当前配置转换为JSON格式
+    const configData = parseConfigToJson(configContent.value, selectedFormat.value)
+    
+    const data = {
+      appId: selectedAppInfo.value.id,
+      envId: selectedEnvInfo.value.id,
+      snapshotName: stageForm.snapshotName,
+      snapshotDesc: stageForm.snapshotDesc,
+      configData: configData,
+      createdBy: 'admin' // 这里应该从用户信息获取
+    }
+    
+    await configSnapshotApi.createStagedSnapshot(data)
+    ElMessage.success('暂存配置成功')
+    showStageDialog.value = false
+    
+    // 重置表单
+    stageForm.snapshotName = ''
+    stageForm.snapshotDesc = ''
+  } catch (error) {
+    ElMessage.error('暂存配置失败: ' + error.message)
+  } finally {
+    stagingLoading.value = false
+  }
+}
+
+// 确认发布配置
+const confirmPublishConfig = async () => {
+  if (!publishForm.snapshotId) {
+    ElMessage.warning('请选择要发布的快照')
+    return
+  }
+  
+  if (!publishForm.publishedBy) {
+    ElMessage.warning('请输入发布人')
+    return
+  }
+  
+  try {
+    publishingLoading.value = true
+    
+    // 发布快照
+    await configSnapshotApi.publishSnapshot(
+      publishForm.snapshotId, 
+      { publishedBy: publishForm.publishedBy }
+    )
+    
+    // 推送配置
+    const pushData = {}
+    if (publishForm.pushType === 'specific') {
+      pushData.targetInstances = publishForm.targetInstances
+    }
+    
+    await configPushApi.pushSnapshotConfig(publishForm.snapshotId, pushData)
+    
+    ElMessage.success('发布配置成功')
+    showPublishDialog.value = false
+    
+    // 重置表单
+    publishForm.snapshotId = null
+    publishForm.publishedBy = ''
+    publishForm.pushType = 'all'
+    publishForm.targetInstances = []
+  } catch (error) {
+    ElMessage.error('发布配置失败: ' + error.message)
+  } finally {
+    publishingLoading.value = false
+  }
+}
+
+// 加载在线客户端
+const loadOnlineClients = async () => {
+  if (!selectedAppInfo.value) return
+  
+  try {
+    const response = await configPushApi.getOnlineClients(selectedAppInfo.value.id)
+    onlineClients.value = response.data
+  } catch (error) {
+    console.error('加载在线客户端失败:', error)
+  }
+}
+
+// 解析配置为JSON格式
+const parseConfigToJson = (content, format) => {
+  try {
+    switch (format) {
+      case 'json':
+        return JSON.parse(content)
+      case 'yaml':
+        // 简单的YAML解析（支持基本的键值对和嵌套结构）
+        return parseYamlToJson(content)
+      case 'properties':
+        // 解析properties格式
+        const lines = content.split('\n')
+        const result = {}
+        lines.forEach(line => {
+          const trimmed = line.trim()
+          if (trimmed && !trimmed.startsWith('#')) {
+            const index = trimmed.indexOf('=')
+            if (index > 0) {
+              const key = trimmed.substring(0, index).trim()
+              const value = trimmed.substring(index + 1).trim()
+              result[key] = value
+            }
+          }
+        })
+        return result
+      default:
+        return { content: content }
+    }
+  } catch (error) {
+    console.error('解析配置失败:', error)
+    return { content: content }
+  }
+}
+
+// 简单的YAML解析函数
+const parseYamlToJson = (yamlContent) => {
+  const lines = yamlContent.split('\n')
+  const result = {}
+  const stack = []
+  
+  lines.forEach(line => {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) return
+    
+    // 计算缩进级别
+    const indent = line.length - line.trimStart().length
+    const level = Math.floor(indent / 2)
+    
+    // 调整栈的大小
+    while (stack.length > level) {
+      stack.pop()
+    }
+    
+    // 解析键值对
+    const colonIndex = trimmed.indexOf(':')
+    if (colonIndex > 0) {
+      const key = trimmed.substring(0, colonIndex).trim()
+      const value = trimmed.substring(colonIndex + 1).trim()
+      
+      // 移除引号
+      const cleanValue = value.replace(/^["']|["']$/g, '')
+      
+      // 构建嵌套路径
+      let current = result
+      stack.forEach(stackKey => {
+        if (!current[stackKey]) {
+          current[stackKey] = {}
+        }
+        current = current[stackKey]
+      })
+      
+      if (value === '') {
+        // 空值表示这是一个对象
+        current[key] = {}
+        stack.push(key)
+      } else {
+        // 有值表示这是一个叶子节点
+        current[key] = cleanValue
+      }
+    }
+  })
+  
+  return result
 }
 
 onMounted(() => {

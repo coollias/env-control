@@ -53,12 +53,12 @@ public class ConfigConverter {
      */
     public List<String> convertToList(String value) {
         if (value == null || value.trim().isEmpty()) {
-            return List.of();
+            return new ArrayList<>();
         }
         
         // 支持逗号分隔的字符串
         String[] parts = value.split(",");
-        return List.of(parts);
+        return Arrays.asList(parts);
     }
     
     /**
@@ -66,7 +66,7 @@ public class ConfigConverter {
      */
     public Map<String, String> convertToMap(String value) {
         if (value == null || value.trim().isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         
         Map<String, String> result = new java.util.HashMap<>();

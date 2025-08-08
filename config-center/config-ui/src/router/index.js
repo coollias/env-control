@@ -5,6 +5,7 @@ import Environments from '../views/Environments.vue'
 import Configs from '../views/Configs.vue'
 import AppEnvironments from '../views/AppEnvironments.vue'
 import ConfigVersions from '../views/ConfigVersions.vue'
+import ConfigSnapshot from '../views/ConfigSnapshot.vue'
 import Client from '../views/Client.vue'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
@@ -58,6 +59,12 @@ const routes = [
     path: '/config-versions',
     name: 'ConfigVersions',
     component: ConfigVersions,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/config-snapshots',
+    name: 'ConfigSnapshot',
+    component: ConfigSnapshot,
     meta: { requiresAuth: true }
   },
   {

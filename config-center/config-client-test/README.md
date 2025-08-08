@@ -154,7 +154,24 @@ GET /api/business/dynamic/{key}
 2. 启动测试项目：`mvn spring-boot:run`
 3. 访问 `http://localhost:8081/api/config/health` 检查客户端状态
 
-### 2. 基本功能测试
+### 2. 使用Web界面测试（推荐）
+
+```bash
+# 在config-client-test目录下
+./start-frontend.sh
+```
+
+或者直接在浏览器中打开 `frontend/index.html` 文件
+
+Web界面提供以下功能：
+- **客户端状态监控**: 实时显示客户端运行状态
+- **操作控制**: 启动/停止客户端，刷新配置
+- **配置展示**: 显示所有配置和业务配置
+- **监控指标**: 显示各种监控数据
+- **缓存信息**: 显示本地缓存状态
+- **实时日志**: 显示操作日志和系统日志
+
+### 3. 使用API接口测试
 
 1. **启动客户端**：
    ```bash
@@ -178,7 +195,7 @@ GET /api/business/dynamic/{key}
    curl http://localhost:8081/api/business/redis
    ```
 
-### 3. 配置热更新测试
+### 4. 配置热更新测试
 
 1. 在配置中心修改某个配置项
 2. 等待30秒（默认轮询间隔）或手动刷新：
@@ -190,7 +207,7 @@ GET /api/business/dynamic/{key}
    curl http://localhost:8081/api/config/all
    ```
 
-### 4. 监控指标测试
+### 5. 监控指标测试
 
 ```bash
 curl http://localhost:8081/api/config/health

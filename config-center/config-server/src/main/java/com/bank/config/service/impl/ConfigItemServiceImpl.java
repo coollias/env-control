@@ -412,21 +412,54 @@ public class ConfigItemServiceImpl implements ConfigItemService {
         // 创建配置项
         ConfigItem created = createConfigItem(configItem);
         
-        // 自动生成版本
-        String versionNumber = generateVersionNumber(created.getAppId(), created.getEnvId());
+        // 使用数据库级别的唯一性检查
+        String versionNumber = null;
+        ConfigVersion version = null;
+        int maxRetries = 10;
         
-        // 创建版本记录
-        ConfigVersion version = new ConfigVersion();
-        version.setAppId(created.getAppId());
-        version.setEnvId(created.getEnvId());
-        version.setVersionNumber(versionNumber);
-        version.setVersionName("新增配置项: " + created.getConfigKey());
-        version.setVersionDesc("新增配置项 " + created.getConfigKey());
-        version.setChangeType(1);
-        version.setCreatedBy(createdBy);
-        version.setChangeSummary("新增了 1 个配置项");
-        
-        version = configVersionRepository.save(version);
+        for (int i = 0; i < maxRetries; i++) {
+            try {
+                // 生成版本号
+                versionNumber = generateVersionNumber(created.getAppId(), created.getEnvId());
+                
+                // 检查版本号是否已存在
+                if (configVersionRepository.existsByAppIdAndEnvIdAndVersionNumber(created.getAppId(), created.getEnvId(), versionNumber)) {
+                    // 如果版本号已存在，继续重试
+                    if (i < maxRetries - 1) {
+                        continue;
+                    } else {
+                        // 达到最大重试次数，使用时间戳
+                        versionNumber = "v" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+                    }
+                }
+                
+                // 创建版本记录
+                version = new ConfigVersion();
+                version.setAppId(created.getAppId());
+                version.setEnvId(created.getEnvId());
+                version.setVersionNumber(versionNumber);
+                version.setVersionName("新增配置项: " + created.getConfigKey());
+                version.setVersionDesc("新增配置项 " + created.getConfigKey());
+                version.setChangeType(1);
+                version.setCreatedBy(createdBy);
+                version.setChangeSummary("新增了 1 个配置项");
+                
+                // 保存版本
+                version = configVersionRepository.save(version);
+                
+                // 如果成功保存，跳出循环
+                break;
+                
+            } catch (Exception e) {
+                if (e.getMessage().contains("uk_app_env_version") && i < maxRetries - 1) {
+                    // 版本号冲突，继续重试
+                    continue;
+                } else {
+                    // 其他错误或达到最大重试次数，抛出异常
+                    throw e;
+                }
+            }
+        }
         
         // 创建变更记录
         ConfigChange change = new ConfigChange();
@@ -457,21 +490,54 @@ public class ConfigItemServiceImpl implements ConfigItemService {
         // 更新配置项
         ConfigItem updated = updateConfigItem(id, configItem);
         
-        // 自动生成版本
-        String versionNumber = generateVersionNumber(updated.getAppId(), updated.getEnvId());
+        // 使用数据库级别的唯一性检查
+        String versionNumber = null;
+        ConfigVersion version = null;
+        int maxRetries = 10;
         
-        // 创建版本记录
-        ConfigVersion version = new ConfigVersion();
-        version.setAppId(updated.getAppId());
-        version.setEnvId(updated.getEnvId());
-        version.setVersionNumber(versionNumber);
-        version.setVersionName("修改配置项: " + updated.getConfigKey());
-        version.setVersionDesc("修改配置项 " + updated.getConfigKey() + "，原值: " + oldValue + "，新值: " + updated.getConfigValue());
-        version.setChangeType(2);
-        version.setCreatedBy(createdBy);
-        version.setChangeSummary("修改了 1 个配置项");
-        
-        version = configVersionRepository.save(version);
+        for (int i = 0; i < maxRetries; i++) {
+            try {
+                // 生成版本号
+                versionNumber = generateVersionNumber(updated.getAppId(), updated.getEnvId());
+                
+                // 检查版本号是否已存在
+                if (configVersionRepository.existsByAppIdAndEnvIdAndVersionNumber(updated.getAppId(), updated.getEnvId(), versionNumber)) {
+                    // 如果版本号已存在，继续重试
+                    if (i < maxRetries - 1) {
+                        continue;
+                    } else {
+                        // 达到最大重试次数，使用时间戳
+                        versionNumber = "v" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+                    }
+                }
+                
+                // 创建版本记录
+                version = new ConfigVersion();
+                version.setAppId(updated.getAppId());
+                version.setEnvId(updated.getEnvId());
+                version.setVersionNumber(versionNumber);
+                version.setVersionName("修改配置项: " + updated.getConfigKey());
+                version.setVersionDesc("修改配置项 " + updated.getConfigKey() + "，原值: " + oldValue + "，新值: " + updated.getConfigValue());
+                version.setChangeType(2);
+                version.setCreatedBy(createdBy);
+                version.setChangeSummary("修改了 1 个配置项");
+                
+                // 保存版本
+                version = configVersionRepository.save(version);
+                
+                // 如果成功保存，跳出循环
+                break;
+                
+            } catch (Exception e) {
+                if (e.getMessage().contains("uk_app_env_version") && i < maxRetries - 1) {
+                    // 版本号冲突，继续重试
+                    continue;
+                } else {
+                    // 其他错误或达到最大重试次数，抛出异常
+                    throw e;
+                }
+            }
+        }
         
         // 创建变更记录
         ConfigChange change = new ConfigChange();

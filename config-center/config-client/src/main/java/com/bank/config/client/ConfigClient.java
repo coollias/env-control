@@ -167,11 +167,11 @@ public class ConfigClient {
             }
 
             refreshConfig();
-            return enableCache ? cache.getAllConfigs() : Map.of();
+            return enableCache ? cache.getAllConfigs() : new HashMap<>();
 
         } catch (Exception e) {
             logger.error("获取所有配置失败", e);
-            return Map.of();
+            return new HashMap<>();
         }
     }
 

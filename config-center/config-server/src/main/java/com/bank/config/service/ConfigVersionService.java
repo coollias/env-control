@@ -1,5 +1,6 @@
 package com.bank.config.service;
 
+import com.bank.config.dto.ConfigVersionDTO;
 import com.bank.config.entity.ConfigVersion;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +35,11 @@ public interface ConfigVersionService {
      * 根据应用ID和环境ID查找版本列表
      */
     List<ConfigVersion> findByAppIdAndEnvId(Long appId, Long envId);
+
+    /**
+     * 根据应用ID和环境ID查找版本DTO列表
+     */
+    List<ConfigVersionDTO> findDTOsByAppIdAndEnvId(Long appId, Long envId);
 
     /**
      * 根据应用ID和环境ID分页查找版本列表

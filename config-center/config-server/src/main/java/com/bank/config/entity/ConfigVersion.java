@@ -1,5 +1,6 @@
 package com.bank.config.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import javax.persistence.*;
 
 /**
@@ -38,10 +39,12 @@ public class ConfigVersion extends BaseEntity {
     // 关联关系
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "app_id", insertable = false, updatable = false)
+    @JsonIgnore
     private Application application;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "env_id", insertable = false, updatable = false)
+    @JsonIgnore
     private Environment environment;
 
     public Long getAppId() {

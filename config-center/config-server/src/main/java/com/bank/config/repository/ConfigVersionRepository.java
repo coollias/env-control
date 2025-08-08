@@ -1,5 +1,6 @@
 package com.bank.config.repository;
 
+import com.bank.config.dto.ConfigVersionDTO;
 import com.bank.config.entity.ConfigVersion;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +24,16 @@ public interface ConfigVersionRepository extends JpaRepository<ConfigVersion, Lo
      * 根据应用ID和环境ID查找版本列表，按创建时间倒序
      */
     List<ConfigVersion> findByAppIdAndEnvIdOrderByCreatedAtDesc(Long appId, Long envId);
+
+    /**
+     * 根据应用ID和环境ID查找版本DTO列表，按创建时间倒序
+     */
+    @Query("SELECT new com.bank.config.dto.ConfigVersionDTO(" +
+           "v.id, v.appId, v.envId, v.versionNumber, v.versionName, v.versionDesc, " +
+           "v.changeType, v.changeSummary, v.createdBy, v.createdAt, v.updatedAt) " +
+           "FROM ConfigVersion v WHERE v.appId = :appId AND v.envId = :envId " +
+           "ORDER BY v.createdAt DESC")
+    List<ConfigVersionDTO> findDTOsByAppIdAndEnvIdOrderByCreatedAtDesc(@Param("appId") Long appId, @Param("envId") Long envId);
 
     /**
      * 根据应用ID和环境ID分页查找版本列表，按创建时间倒序

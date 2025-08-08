@@ -37,6 +37,10 @@
               <el-icon><View /></el-icon>
               <span>应用环境</span>
             </el-menu-item>
+            <el-menu-item index="/config-snapshots">
+              <el-icon><Clock /></el-icon>
+              <span>配置快照</span>
+            </el-menu-item>
             <!-- <el-menu-item index="/config-versions">
               <el-icon><Clock /></el-icon>
               <span>版本管理</span>

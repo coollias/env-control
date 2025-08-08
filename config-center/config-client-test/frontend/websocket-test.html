@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket客户端测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .config-preview {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket客户端测试</h1>
+    
+    <div class="container">
+        <h2>客户端配置</h2>
+        <div class="form-group">
+            <label for="appId">应用ID:</label>
+            <input type="number" id="appId" value="1" min="1">
+        </div>
+        <div class="form-group">
+            <label for="instanceId">实例ID:</label>
+            <input type="text" id="instanceId" value="test-instance-001">
+        </div>
+        <div class="form-group">
+            <label for="instanceIp">实例IP:</label>
+            <input type="text" id="instanceIp" value="127.0.0.1">
+        </div>
+        <div class="form-group">
+            <label for="clientVersion">客户端版本:</label>
+            <input type="text" id="clientVersion" value="1.0.0">
+        </div>
+        <button onclick="connect()" id="connectBtn">连接</button>
+        <button onclick="disconnect()" id="disconnectBtn" disabled>断开</button>
+    </div>
+    
+    <div class="container">
+        <h2>连接状态</h2>
+        <div id="status" class="status disconnected">
+            未连接
+        </div>
+    </div>
+    
+    <div class="container">
+        <h2>配置更新</h2>
+        <div id="configPreview" class="config-preview" style="display: none;">
+            <h3>最新配置</h3>
+            <pre id="configData">等待配置更新...</pre>
+        </div>
+    </div>
+    
+    <div class="container">
+        <h2>日志</h2>
+        <div id="log" class="log"></div>
+        <button onclick="clearLog()">清空日志</button>
+    </div>
+
+    <!-- 引入WebSocket相关库 -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    
+    <script>
+        let configClient = null;
+        let isConnected = false;
+
+        // 日志函数
+        function log(message, type = 'info') {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<span style="color: #666;">[${timestamp}]</span> <span style="color: ${type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#007bff'};">${message}</span>`;
+            logElement.appendChild(logEntry);
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        // 清空日志
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        // 更新状态
+        function updateStatus(connected) {
+            isConnected = connected;
+            const statusElement = document.getElementById('status');
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            
+            if (connected) {
+                statusElement.className = 'status connected';
+                statusElement.textContent = '已连接';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            } else {
+                statusElement.className = 'status disconnected';
+                statusElement.textContent = '未连接';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            }
+        }
+
+        // 更新配置预览
+        function updateConfigPreview(configData) {
+            const previewElement = document.getElementById('configPreview');
+            const configDataElement = document.getElementById('configData');
+            
+            previewElement.style.display = 'block';
+            configDataElement.textContent = JSON.stringify(configData, null, 2);
+        }
+
+        // 连接WebSocket
+        function connect() {
+            const appId = parseInt(document.getElementById('appId').value);
+            const instanceId = document.getElementById('instanceId').value;
+            const instanceIp = document.getElementById('instanceIp').value;
+            const clientVersion = document.getElementById('clientVersion').value;
+
+            if (!appId || !instanceId || !instanceIp || !clientVersion) {
+                alert('请填写所有配置项');
+                return;
+            }
+
+            try {
+                // 创建WebSocket连接
+                const socket = new SockJS('http://localhost:8080/ws');
+                const stompClient = Stomp.over(socket);
+                
+                log('正在连接WebSocket服务器...');
+                
+                stompClient.connect({}, 
+                    // 连接成功回调
+                    (frame) => {
+                        log('WebSocket连接成功', 'success');
+                        updateStatus(true);
+                        
+                        // 发送客户端注册信息
+                        const message = {
+                            appId: appId,
+                            instanceId: instanceId,
+                            instanceIp: instanceIp,
+                            clientVersion: clientVersion
+                        };
+                        
+                        stompClient.send('/app/connect', {}, JSON.stringify(message));
+                        log('客户端注册信息已发送: ' + JSON.stringify(message));
+                        
+                        // 订阅配置更新主题
+                        subscribeToConfigUpdates(stompClient, appId, instanceId);
+                        
+                        // 启动心跳
+                        startHeartbeat(stompClient);
+                        
+                        configClient = stompClient;
+                    },
+                    // 连接失败回调
+                    (error) => {
+                        log('WebSocket连接失败: ' + error, 'error');
+                        updateStatus(false);
+                    }
+                );
+            } catch (error) {
+                log('创建WebSocket连接失败: ' + error, 'error');
+                updateStatus(false);
+            }
+        }
+
+        // 订阅配置更新
+        function subscribeToConfigUpdates(stompClient, appId, instanceId) {
+            // 订阅应用配置更新
+            stompClient.subscribe(`/topic/app/${appId}/config`, (message) => {
+                handleConfigUpdate(message);
+            });
+            
+            // 订阅环境配置更新
+            stompClient.subscribe(`/topic/app/${appId}/env/*/config`, (message) => {
+                handleConfigUpdate(message);
+            });
+            
+            // 订阅实例配置更新
+            stompClient.subscribe(`/topic/instance/${instanceId}/config`, (message) => {
+                handleConfigUpdate(message);
+            });
+            
+            // 订阅配置变更通知
+            stompClient.subscribe(`/topic/app/${appId}/notifications`, (message) => {
+                handleConfigNotification(message);
+            });
+            
+            log('已订阅配置更新主题');
+        }
+
+        // 处理配置更新
+        function handleConfigUpdate(message) {
+            try {
+                const data = JSON.parse(message.body);
+                log('收到配置更新: ' + JSON.stringify(data), 'success');
+                
+                if (data.type === 'CONFIG_UPDATE') {
+                    updateConfigPreview(data.configData);
+                    log(`配置已更新 - 应用: ${data.appId}, 环境: ${data.envId}, 版本: ${data.versionNumber || '最新'}`);
+                }
+            } catch (error) {
+                log('处理配置更新失败: ' + error, 'error');
+            }
+        }
+
+        // 处理配置变更通知
+        function handleConfigNotification(message) {
+            try {
+                const data = JSON.parse(message.body);
+                log('收到配置变更通知: ' + JSON.stringify(data));
+                
+                if (data.type === 'CONFIG_CHANGE_NOTIFICATION') {
+                    log(`配置变更通知 - 应用: ${data.appId}, 环境: ${data.envId}, 版本: ${data.versionNumber}`);
+                }
+            } catch (error) {
+                log('处理配置变更通知失败: ' + error, 'error');
+            }
+        }
+
+        // 启动心跳
+        function startHeartbeat(stompClient) {
+            const heartbeatInterval = setInterval(() => {
+                if (isConnected) {
+                    stompClient.send('/app/heartbeat', {}, JSON.stringify({}));
+                    log('发送心跳');
+                } else {
+                    clearInterval(heartbeatInterval);
+                }
+            }, 30000); // 30秒发送一次心跳
+        }
+
+        // 断开连接
+        function disconnect() {
+            if (configClient) {
+                configClient.send('/app/disconnect', {}, JSON.stringify({}));
+                configClient.disconnect();
+                configClient = null;
+            }
+            
+            updateStatus(false);
+            log('WebSocket连接已断开');
+        }
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            log('WebSocket客户端测试页面已加载');
+            updateStatus(false);
+        });
+    </script>
+</body>
+</html>

@@ -167,6 +167,70 @@ export const configVersionApi = {
   getConfigChangeHistory: (appId, envId, configKey) => api.get(`/config-versions/app/${appId}/env/${envId}/config/${configKey}/history`)
 }
 
+// 配置快照管理API
+export const configSnapshotApi = {
+  // 创建暂存快照
+  createStagedSnapshot: (data) => api.post('/config-snapshots/staged', data),
+  // 发布快照
+  publishSnapshot: (snapshotId, data) => api.post(`/config-snapshots/${snapshotId}/publish`, data),
+  // 获取快照详情
+  getSnapshot: (id) => api.get(`/config-snapshots/${id}`),
+  // 获取应用环境的快照列表
+  getSnapshotsByAppAndEnv: (appId, envId) => api.get(`/config-snapshots/app/${appId}/env/${envId}`),
+  // 分页获取快照列表
+  getSnapshotsByAppAndEnvPage: (appId, envId, params) => api.get(`/config-snapshots/app/${appId}/env/${envId}/page`, { params }),
+  // 删除快照
+  deleteSnapshot: (id) => api.delete(`/config-snapshots/${id}`),
+  // 获取最新版本号
+  getLatestVersionNumber: (appId, envId) => api.get(`/config-snapshots/app/${appId}/env/${envId}/latest-version`),
+  // 生成新版本号
+  generateVersionNumber: (appId, envId) => api.get(`/config-snapshots/app/${appId}/env/${envId}/generate-version`),
+  // 获取快照的配置项列表
+  getSnapshotItems: (snapshotId) => api.get(`/config-snapshots/${snapshotId}/items`),
+  // 获取快照的配置数据
+  getSnapshotConfigData: (snapshotId) => api.get(`/config-snapshots/${snapshotId}/config-data`),
+  // 比较两个快照的差异
+  compareSnapshots: (snapshotId1, snapshotId2) => api.get('/config-snapshots/compare', { 
+    params: { snapshotId1, snapshotId2 } 
+  }),
+  // 回滚到指定快照
+  rollbackToSnapshot: (appId, envId, snapshotId, data) => api.post(`/config-snapshots/app/${appId}/env/${envId}/rollback/${snapshotId}`, data),
+  // 获取应用环境的最新发布快照
+  getLatestPublishedSnapshot: (appId, envId) => api.get(`/config-snapshots/app/${appId}/env/${envId}/latest-published`),
+  // 获取应用环境的最新暂存快照
+  getLatestStagedSnapshot: (appId, envId) => api.get(`/config-snapshots/app/${appId}/env/${envId}/latest-staged`),
+  // 应用快照到环境
+  applySnapshotToEnvironment: (snapshotId, data) => api.post(`/config-snapshots/${snapshotId}/apply`, data),
+  // 验证快照配置
+  validateSnapshotConfig: (snapshotId) => api.post(`/config-snapshots/${snapshotId}/validate`),
+  // 获取快照统计信息
+  getSnapshotStatistics: (appId, envId) => api.get(`/config-snapshots/app/${appId}/env/${envId}/statistics`)
+}
+
+// 配置推送管理API
+export const configPushApi = {
+  // 推送配置到应用的所有客户端
+  pushConfigToApp: (appId, envId, data) => api.post(`/config-push/app/${appId}/env/${envId}/push`, data),
+  // 推送配置到指定的客户端实例
+  pushConfigToInstances: (appId, envId, data) => api.post(`/config-push/app/${appId}/env/${envId}/push-to-instances`, data),
+  // 推送快照配置
+  pushSnapshotConfig: (snapshotId, data) => api.post(`/config-push/snapshot/${snapshotId}/push`, data),
+  // 推送配置变更通知
+  pushConfigChangeNotification: (appId, envId, data) => api.post(`/config-push/app/${appId}/env/${envId}/notification`, data),
+  // 获取在线客户端列表
+  getOnlineClients: (appId) => api.get(`/config-push/app/${appId}/clients`),
+  // 获取客户端连接统计
+  getClientConnectionStats: (appId) => api.get(`/config-push/app/${appId}/stats`),
+  // 断开指定客户端连接
+  disconnectClient: (connectionId) => api.post(`/config-push/client/${connectionId}/disconnect`),
+  // 广播消息到所有客户端
+  broadcastMessage: (data) => api.post('/config-push/broadcast', data),
+  // 发送消息到指定应用的所有客户端
+  sendMessageToApp: (appId, data) => api.post(`/config-push/app/${appId}/message`, data),
+  // 发送消息到指定的客户端实例
+  sendMessageToInstances: (data) => api.post('/config-push/instances/message', data)
+}
+
 // 客户端API
 export const clientApi = {
   // 获取配置

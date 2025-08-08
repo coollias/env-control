@@ -1,6 +1,7 @@
 package com.bank.config.controller;
 
 import com.bank.config.common.ApiResponse;
+import com.bank.config.dto.ConfigVersionDTO;
 import com.bank.config.entity.ConfigVersion;
 import com.bank.config.service.ConfigVersionService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,11 +56,11 @@ public class ConfigVersionController {
      * 根据应用ID和环境ID获取版本列表
      */
     @GetMapping("/app/{appId}/env/{envId}")
-    public ApiResponse<List<ConfigVersion>> getVersionsByAppAndEnv(
+    public ApiResponse<List<ConfigVersionDTO>> getVersionsByAppAndEnv(
             @PathVariable Long appId,
             @PathVariable Long envId) {
         try {
-            List<ConfigVersion> versions = configVersionService.findByAppIdAndEnvId(appId, envId);
+            List<ConfigVersionDTO> versions = configVersionService.findDTOsByAppIdAndEnvId(appId, envId);
             return ApiResponse.success(versions);
         } catch (Exception e) {
             return ApiResponse.error(e.getMessage());

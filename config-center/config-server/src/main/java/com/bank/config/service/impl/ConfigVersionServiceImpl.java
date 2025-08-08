@@ -1,5 +1,6 @@
 package com.bank.config.service.impl;
 
+import com.bank.config.dto.ConfigVersionDTO;
 import com.bank.config.entity.ConfigChange;
 import com.bank.config.entity.ConfigItem;
 import com.bank.config.entity.ConfigVersion;
@@ -73,6 +74,13 @@ public class ConfigVersionServiceImpl implements ConfigVersionService {
 
     @Override
     @Transactional(readOnly = true)
+    @org.springframework.cache.annotation.Cacheable(value = "versions", key = "'app:' + #appId + ':env:' + #envId + ':dto:list'")
+    public List<ConfigVersionDTO> findDTOsByAppIdAndEnvId(Long appId, Long envId) {
+        return configVersionRepository.findDTOsByAppIdAndEnvIdOrderByCreatedAtDesc(appId, envId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<ConfigVersion> findByAppIdAndEnvId(Long appId, Long envId, Pageable pageable) {
         return configVersionRepository.findByAppIdAndEnvIdOrderByCreatedAtDesc(appId, envId, pageable);
     }
@@ -130,25 +138,57 @@ public class ConfigVersionServiceImpl implements ConfigVersionService {
                                                String versionDesc, String createdBy, 
                                                Map<String, String> changes, Integer changeType) {
         
-        // 生成版本号
-        String versionNumber = generateVersionNumber(appId, envId);
+        // 使用数据库级别的唯一性检查
+        String versionNumber = null;
+        ConfigVersion version = null;
+        int maxRetries = 10;
         
-        // 创建版本
-        ConfigVersion version = new ConfigVersion();
-        version.setAppId(appId);
-        version.setEnvId(envId);
-        version.setVersionNumber(versionNumber);
-        version.setVersionName(versionName);
-        version.setVersionDesc(versionDesc);
-        version.setChangeType(changeType);
-        version.setCreatedBy(createdBy);
-        
-        // 生成变更摘要
-        String changeSummary = generateChangeSummary(changes, changeType);
-        version.setChangeSummary(changeSummary);
-        
-        // 保存版本
-        version = configVersionRepository.save(version);
+        for (int i = 0; i < maxRetries; i++) {
+            try {
+                // 生成版本号
+                versionNumber = generateVersionNumber(appId, envId);
+                
+                // 检查版本号是否已存在
+                if (existsByAppIdAndEnvIdAndVersionNumber(appId, envId, versionNumber)) {
+                    // 如果版本号已存在，继续重试
+                    if (i < maxRetries - 1) {
+                        continue;
+                    } else {
+                        // 达到最大重试次数，使用时间戳
+                        versionNumber = "v" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+                    }
+                }
+                
+                // 创建版本
+                version = new ConfigVersion();
+                version.setAppId(appId);
+                version.setEnvId(envId);
+                version.setVersionNumber(versionNumber);
+                version.setVersionName(versionName);
+                version.setVersionDesc(versionDesc);
+                version.setChangeType(changeType);
+                version.setCreatedBy(createdBy);
+                
+                // 生成变更摘要
+                String changeSummary = generateChangeSummary(changes, changeType);
+                version.setChangeSummary(changeSummary);
+                
+                // 保存版本
+                version = configVersionRepository.save(version);
+                
+                // 如果成功保存，跳出循环
+                break;
+                
+            } catch (Exception e) {
+                if (e.getMessage().contains("uk_app_env_version") && i < maxRetries - 1) {
+                    // 版本号冲突，继续重试
+                    continue;
+                } else {
+                    // 其他错误或达到最大重试次数，抛出异常
+                    throw e;
+                }
+            }
+        }
         
         // 记录变更详情
         for (Map.Entry<String, String> entry : changes.entrySet()) {

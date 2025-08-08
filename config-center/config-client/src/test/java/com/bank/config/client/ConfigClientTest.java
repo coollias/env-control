@@ -30,10 +30,9 @@ public class ConfigClientTest {
         assertEquals("test.value", cache.get("test.key"));
         
         // 测试更新配置
-        Map<String, String> newConfigs = Map.of(
-            "key1", "value1",
-            "key2", "value2"
-        );
+        Map<String, String> newConfigs = new HashMap<>();
+        newConfigs.put("key1", "value1");
+        newConfigs.put("key2", "value2");
         cache.updateConfigs(newConfigs);
         assertEquals("value1", cache.get("key1"));
         assertEquals("value2", cache.get("key2"));

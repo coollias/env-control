@@ -3,6 +3,7 @@ package com.bank.config.config;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.datatype.jsr310.JSR310Module;
 import org.springframework.context.annotation.Bean;
@@ -36,6 +37,10 @@ public class JacksonConfig {
         
         // 添加PageImpl的Mixin
         mapper.addMixIn(PageImpl.class, PageImplMixin.class);
+        
+        // 配置Hibernate懒加载处理
+        mapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+        mapper.configure(SerializationFeature.FAIL_ON_SELF_REFERENCES, false);
         
         return mapper;
     }
