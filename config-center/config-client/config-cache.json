@@ -1,0 +1,1 @@
+{"configs":{"database.pool.timeout":"30001","database.username":"root","redis.database":"0","redis.password":"","java.version":"1.733","redis.host":"localhost","redis.port":"6379","database.url":"jdbc:mysql://localhost:3306/myapp","redis.timeout":"2000","database.pool.minConnections":"8"},"lastUpdateTime":"2025-08-11T10:34:54.618","version":null}

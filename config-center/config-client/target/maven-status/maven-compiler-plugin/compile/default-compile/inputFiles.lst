@@ -1,7 +1,9 @@
 /Users/coollias/Documents/Code/env/env-control/config-center/config-client/src/main/java/com/bank/config/client/security/ConfigSecurity.java
 /Users/coollias/Documents/Code/env/env-control/config-center/config-client/src/main/java/com/bank/config/client/poller/ConfigChangeListener.java
+/Users/coollias/Documents/Code/env/env-control/config-center/config-client/src/main/java/com/bank/config/client/example/WebSocketConfigClientExample.java
 /Users/coollias/Documents/Code/env/env-control/config-center/config-client/src/main/java/com/bank/config/client/metrics/ConfigMetrics.java
 /Users/coollias/Documents/Code/env/env-control/config-center/config-client/src/main/java/com/bank/config/client/cache/ConfigCache.java
+/Users/coollias/Documents/Code/env/env-control/config-center/config-client/src/main/java/com/bank/config/client/websocket/WebSocketConfigClient.java
 /Users/coollias/Documents/Code/env/env-control/config-center/config-client/src/main/java/com/bank/config/client/gui/ConfigClientGUI.java
 /Users/coollias/Documents/Code/env/env-control/config-center/config-client/src/main/java/com/bank/config/client/ConfigClient.java
 /Users/coollias/Documents/Code/env/env-control/config-center/config-client/src/main/java/com/bank/config/client/parser/ConfigParser.java

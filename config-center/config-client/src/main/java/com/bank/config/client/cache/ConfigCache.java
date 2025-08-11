@@ -1,6 +1,8 @@
 package com.bank.config.client.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +35,10 @@ public class ConfigCache {
         this.cacheFile = cacheFile;
         this.expireTime = expireTime;
         this.objectMapper = new ObjectMapper();
+        // 注册Java 8日期时间模块
+        this.objectMapper.registerModule(new JavaTimeModule());
+        // 禁用将日期写为时间戳
+        this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         this.configMap = new HashMap<>();
         this.configDetails = new HashMap<>();
     }

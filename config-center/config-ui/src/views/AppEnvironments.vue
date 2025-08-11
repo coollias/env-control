@@ -847,29 +847,16 @@ const confirmPublishConfig = async () => {
     return
   }
   
-  if (!publishForm.publishedBy) {
-    ElMessage.warning('请输入发布人')
-    return
-  }
-  
   try {
     publishingLoading.value = true
     
-    // 发布快照
+    // 发布快照（后端会自动通过WebSocket推送配置更新）
     await configSnapshotApi.publishSnapshot(
       publishForm.snapshotId, 
-      { publishedBy: publishForm.publishedBy }
+      { publishedBy: publishForm.publishedBy || 'admin' }
     )
     
-    // 推送配置
-    const pushData = {}
-    if (publishForm.pushType === 'specific') {
-      pushData.targetInstances = publishForm.targetInstances
-    }
-    
-    await configPushApi.pushSnapshotConfig(publishForm.snapshotId, pushData)
-    
-    ElMessage.success('发布配置成功')
+    ElMessage.success('发布配置成功！配置已通过WebSocket推送给所有订阅的客户端')
     showPublishDialog.value = false
     
     // 重置表单

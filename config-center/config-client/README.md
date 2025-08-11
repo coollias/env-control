@@ -1,67 +1,41 @@
-# Config Client
+# 配置客户端 WebSocket 使用指南
 
-轻量级配置客户端，用于从配置中心拉取配置。
+## 概述
 
-## 特性
+配置客户端现在支持WebSocket连接，可以实时接收服务器推送的配置更新，无需轮询。
 
-- **轻量级**: 不依赖Spring Cloud，纯Java实现
-- **多格式支持**: 支持Properties、YAML、JSON、XML等格式
-- **本地缓存**: 支持本地文件缓存，提高性能
-- **定时拉取**: 支持定时从配置中心拉取最新配置
-- **安全认证**: 支持JWT Token认证
-- **配置加密**: 支持敏感配置的加密解密
-- **降级策略**: 支持配置获取失败时的降级处理
-- **重试机制**: 支持网络异常时的重试
-- **监控指标**: 提供详细的监控指标
-- **健康检查**: 提供健康检查功能
+## 功能特性
 
-## 快速开始
+- **实时配置更新**: 通过WebSocket接收配置变更通知
+- **自动重连**: 连接断开时自动重连
+- **配置缓存**: 本地缓存配置数据，提高性能
+- **监听器模式**: 支持配置变更监听器
+- **心跳机制**: 定期发送心跳保持连接
 
-### 1. 添加依赖
+## 使用方法
 
-```xml
-<dependency>
-    <groupId>com.bank.config</groupId>
-    <artifactId>config-client</artifactId>
-    <version>1.0.0</version>
-</dependency>
-```
-
-### 2. 创建客户端
+### 1. 创建WebSocket配置客户端
 
 ```java
-// 使用构建器创建客户端
 ConfigClient client = new ConfigClient.ConfigClientBuilder()
     .serverUrl("http://localhost:8080")
-    .appCode("my-app")
-    .envCode("prod")
-    .token("your-token")
-    .pollInterval(60000) // 1分钟拉取间隔
-    .cacheFile("/tmp/config-cache.properties")
+    .appCode("myapp")
+    .envCode("dev")
+    .token("your-token-here")
+    .enableWebSocket(true)           // 启用WebSocket
+    .appId(1L)                      // 应用ID
+    .instanceId("instance-001")     // 实例ID
+    .instanceIp("192.168.1.100")    // 实例IP
+    .clientVersion("1.0.0")         // 客户端版本
+    .enablePolling(false)           // 禁用轮询，只使用WebSocket
+    .enableCache(true)
+    .cacheFile("config-cache.json")
     .build();
-
-// 初始化客户端
-client.initialize();
 ```
 
-### 3. 获取配置
+### 2. 添加配置变更监听器
 
 ```java
-// 获取单个配置
-String dbUrl = client.getConfig("database.url");
-String apiKey = client.getConfig("api.key");
-
-// 获取配置并指定默认值
-String timeout = client.getConfig("timeout", "5000");
-
-// 获取所有配置
-Map<String, String> allConfigs = client.getAllConfigs();
-```
-
-### 4. 监听配置变更
-
-```java
-// 添加配置变更监听器
 client.addConfigChangeListener(new ConfigChangeListener() {
     @Override
     public void onConfigChange(String key, String oldValue, String newValue) {
@@ -71,234 +45,104 @@ client.addConfigChangeListener(new ConfigChangeListener() {
     @Override
     public void onConfigRefresh(Map<String, String> newConfigs) {
         System.out.println("配置刷新，共" + newConfigs.size() + "个配置项");
+        newConfigs.forEach((key, value) -> {
+            System.out.println("  " + key + " = " + value);
+        });
     }
 });
 ```
 
+### 3. 启动客户端
+
+```java
+client.start();
+```
+
+### 4. 停止客户端
+
+```java
+client.stop();
+```
+
 ## 配置选项
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| serverUrl | String | - | 配置中心服务器地址 |
-| appCode | String | - | 应用代码 |
-| envCode | String | - | 环境代码 |
-| token | String | - | 认证Token |
-| pollInterval | long | 30000 | 拉取间隔（毫秒） |
-| cacheFile | String | - | 缓存文件路径 |
-| enablePolling | boolean | true | 是否启用定时拉取 |
-| enableCache | boolean | true | 是否启用缓存 |
-| cacheExpireTime | long | 300000 | 缓存过期时间（毫秒） |
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `enableWebSocket` | boolean | 否 | false | 是否启用WebSocket |
+| `appId` | Long | WebSocket启用时必填 | null | 应用ID |
+| `instanceId` | String | WebSocket启用时必填 | null | 实例ID |
+| `instanceIp` | String | 否 | null | 实例IP地址 |
+| `clientVersion` | String | 否 | "1.0.0" | 客户端版本号 |
 
-## 使用示例
+## WebSocket消息格式
 
-### Spring Boot集成
-
-```java
-@Configuration
-public class ConfigClientConfig {
-    
-    @Bean
-    public ConfigClient configClient() {
-        return new ConfigClient.ConfigClientBuilder()
-            .serverUrl("http://config-server:8080")
-            .appCode("my-app")
-            .envCode("prod")
-            .token("your-token")
-            .pollInterval(60000)
-            .cacheFile("/tmp/config-cache.properties")
-            .build();
-    }
-}
-
-@Component
-public class MyService {
-    private final ConfigClient configClient;
-    
-    public MyService(ConfigClient configClient) {
-        this.configClient = configClient;
-    }
-    
-    public void doSomething() {
-        String apiUrl = configClient.getConfig("api.url");
-        String apiKey = configClient.getConfig("api.key");
-        // 使用配置...
-    }
-}
-```
-
-### 独立应用使用
-
-```java
-public class MyApplication {
-    private static ConfigClient configClient;
-    
-    public static void main(String[] args) {
-        // 初始化配置客户端
-        configClient = new ConfigClient.ConfigClientBuilder()
-            .serverUrl("http://config-server:8080")
-            .appCode("my-app")
-            .envCode("prod")
-            .token("your-token")
-            .build();
-        
-        configClient.initialize();
-        
-        // 启动应用
-        startApplication();
-    }
-    
-    public static String getConfig(String key) {
-        return configClient.getConfig(key);
-    }
-}
-```
-
-## 监控和健康检查
-
-### 获取监控指标
-
-```java
-Map<String, Object> metrics = client.getMetrics();
-System.out.println("拉取成功率: " + metrics.get("pull.successRate"));
-System.out.println("缓存命中率: " + metrics.get("cache.hitRate"));
-```
-
-### 健康检查
-
-```java
-boolean isHealthy = client.isHealthy();
-if (!isHealthy) {
-    System.out.println("客户端不健康");
-}
-
-// 获取详细健康状态
-Map<String, Object> health = client.getHealthStatus();
-```
-
-## 配置格式支持
-
-### Properties格式
-
-```properties
-database.url=jdbc:mysql://localhost:3306/test
-database.username=root
-database.password=123456
-```
-
-### YAML格式
-
-```yaml
-database:
-  url: jdbc:mysql://localhost:3306/test
-  username: root
-  password: 123456
-```
-
-### JSON格式
+### 配置更新消息
 
 ```json
 {
-  "database": {
-    "url": "jdbc:mysql://localhost:3306/test",
-    "username": "root",
-    "password": "123456"
-  }
+  "type": "CONFIG_UPDATE",
+  "appId": 1,
+  "envId": 2,
+  "configData": {
+    "database": {
+      "url": "jdbc:mysql://localhost:3306/myapp",
+      "username": "root"
+    },
+    "redis": {
+      "host": "localhost",
+      "port": "6379"
+    }
+  },
+  "timestamp": 1754619822886
 }
 ```
 
-## 安全功能
+### 配置变更通知
 
-### 配置加密
-
-```java
-// 加密配置值
-String encrypted = security.encrypt("sensitive-value");
-
-// 解密配置值
-String decrypted = security.decrypt(encrypted);
+```json
+{
+  "type": "CONFIG_CHANGE_NOTIFICATION",
+  "appId": 1,
+  "envId": 2,
+  "versionNumber": "v1.0.0",
+  "changeType": "PUBLISH",
+  "timestamp": 1754619822886
+}
 ```
 
-### 认证头
+## 服务器端配置
 
-客户端会自动添加以下认证头：
-- `Authorization: Bearer <token>`
-- `X-App-Code: <appCode>`
-- `X-Env-Code: <envCode>`
-- `X-Timestamp: <timestamp>`
+确保服务器端已正确配置WebSocket：
 
-## 错误处理
+1. **WebSocket配置类**: `WebSocketConfig.java`
+2. **消息处理器**: `WebSocketEventHandler.java`
+3. **推送服务**: `ConfigPushService.java`
 
-### 重试机制
+## 示例代码
 
-客户端内置重试机制，默认配置：
-- 最大重试次数：3次
-- 重试延迟：1秒
-- 延迟倍数：2.0
-- 最大延迟：10秒
+完整示例请参考: `WebSocketConfigClientExample.java`
 
-### 降级策略
+## 注意事项
 
-当配置获取失败时，会按以下顺序尝试：
-1. 从本地缓存获取
-2. 从服务器重新拉取
-3. 使用默认值
-
-## 性能优化
-
-### 缓存策略
-
-- 支持本地文件缓存
-- 支持内存缓存
-- 可配置缓存过期时间
-- 支持缓存预热
-
-### 拉取策略
-
-- 支持定时拉取
-- 支持按需拉取
-- 支持版本检查
-- 支持增量更新
-
-## 日志配置
-
-客户端使用SLF4J进行日志记录，可以通过配置日志级别来控制输出：
-
-```properties
-# 设置日志级别
-logging.level.com.bank.config.client=INFO
-```
+1. **网络连接**: 确保客户端能够访问服务器的WebSocket端口
+2. **认证**: 客户端需要有效的认证token
+3. **重连**: 网络异常时会自动重连，无需手动处理
+4. **性能**: WebSocket连接比轮询更高效，减少服务器压力
+5. **兼容性**: 可以同时启用WebSocket和轮询，作为双重保障
 
 ## 故障排除
 
-### 常见问题
+### 连接失败
+- 检查服务器地址和端口
+- 确认网络连接正常
+- 验证认证token是否有效
 
-1. **连接失败**
-   - 检查服务器地址是否正确
-   - 检查网络连接
-   - 检查认证Token是否有效
+### 消息接收异常
+- 检查监听器是否正确设置
+- 确认消息格式是否符合预期
+- 查看日志中的错误信息
 
-2. **配置获取失败**
-   - 检查应用代码和环境代码是否正确
-   - 检查配置项是否存在
-   - 检查权限设置
-
-3. **缓存问题**
-   - 检查缓存文件路径是否有写权限
-   - 检查缓存文件格式是否正确
-   - 尝试清除缓存文件
-
-### 调试模式
-
-启用调试日志：
-
-```properties
-logging.level.com.bank.config.client=DEBUG
-```
-
-## 版本历史
-
-- **1.0.0**: 初始版本，支持基本的配置拉取和缓存功能
-
-## 许可证
-
-MIT License 
+### 性能问题
+- 调整心跳间隔
+- 检查网络延迟
+- 监控内存使用情况 

@@ -65,6 +65,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers("/api/auth/**").permitAll()
                 .antMatchers("/api/health/**").permitAll()
                 .antMatchers("/actuator/**").permitAll()
+                .antMatchers("/ws/**").permitAll()  // 允许WebSocket连接
                 .anyRequest().authenticated()
             .and()
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

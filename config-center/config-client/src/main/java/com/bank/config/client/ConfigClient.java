@@ -10,12 +10,14 @@ import com.bank.config.client.fallback.DefaultConfigFallback;
 import com.bank.config.client.retry.ConfigRetry;
 import com.bank.config.client.metrics.ConfigMetrics;
 import com.bank.config.client.health.ConfigHealthCheck;
+import com.bank.config.client.websocket.WebSocketConfigClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -51,6 +53,14 @@ public class ConfigClient {
     private final ConfigHealthCheck healthCheck;
     private final CloseableHttpClient httpClient;
     private final ObjectMapper objectMapper;
+    
+    // WebSocket客户端
+    private WebSocketConfigClient webSocketClient;
+    private final boolean enableWebSocket;
+    private final Long appId;
+    private final String instanceId;
+    private final String instanceIp;
+    private final String clientVersion;
 
     private final List<ConfigChangeListener> listeners = new CopyOnWriteArrayList<>();
     private final AtomicBoolean initialized = new AtomicBoolean(false);
@@ -80,6 +90,94 @@ public class ConfigClient {
 
         // 初始化拉取器
         this.poller = new ConfigPoller(this, pollInterval);
+        
+        // 初始化WebSocket客户端
+        this.enableWebSocket = builder.enableWebSocket;
+        this.appId = builder.appId;
+        this.instanceId = builder.instanceId;
+        this.instanceIp = builder.instanceIp;
+        this.clientVersion = builder.clientVersion;
+        
+        if (enableWebSocket) {
+            this.webSocketClient = new WebSocketConfigClient(
+                serverUrl,
+                appId,
+                instanceId,
+                instanceIp,
+                clientVersion
+            );
+            
+            // 设置WebSocket监听器
+            setupWebSocketListeners();
+        }
+    }
+
+    /**
+     * 设置WebSocket监听器
+     */
+    private void setupWebSocketListeners() {
+        if (webSocketClient != null) {
+            // 设置配置更新监听器
+            webSocketClient.setConfigUpdateListener(new WebSocketConfigClient.ConfigUpdateListener() {
+                @Override
+                public void onConfigUpdate(Long appId, Long envId, Map<String, Object> configData) {
+                    logger.info("收到WebSocket配置更新: appId={}, envId={}", appId, envId);
+                    
+                    // 将配置数据转换为Map<String, String>格式
+                    Map<String, String> newConfigs = convertConfigData(configData);
+                    
+                    // 更新本地缓存
+                    if (enableCache) {
+                        cache.updateConfigs(newConfigs);
+                    }
+                    
+                    // 通知所有监听器
+                    notifyConfigRefresh(newConfigs);
+                }
+            });
+            
+            // 设置配置变更通知监听器
+            webSocketClient.setNotificationListener(new WebSocketConfigClient.ConfigChangeNotificationListener() {
+                @Override
+                public void onConfigChangeNotification(Long appId, Long envId, String versionNumber, String changeType) {
+                    logger.info("收到配置变更通知: appId={}, envId={}, version={}, type={}", 
+                        appId, envId, versionNumber, changeType);
+                    
+                    // 可以在这里添加特定的通知处理逻辑
+                    if ("PUBLISH".equals(changeType)) {
+                        logger.info("配置已发布，版本: {}", versionNumber);
+                    }
+                }
+            });
+        }
+    }
+    
+    /**
+     * 转换配置数据格式
+     */
+    private Map<String, String> convertConfigData(Map<String, Object> configData) {
+        Map<String, String> result = new java.util.HashMap<>();
+        convertConfigDataRecursive(configData, "", result);
+        return result;
+    }
+    
+    /**
+     * 递归转换配置数据
+     */
+    private void convertConfigDataRecursive(Map<String, Object> configData, String prefix, Map<String, String> result) {
+        for (Map.Entry<String, Object> entry : configData.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            String fullKey = prefix.isEmpty() ? key : prefix + "." + key;
+            
+            if (value instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> nestedMap = (Map<String, Object>) value;
+                convertConfigDataRecursive(nestedMap, fullKey, result);
+            } else {
+                result.put(fullKey, value != null ? value.toString() : "");
+            }
+        }
     }
 
     /**
@@ -295,9 +393,20 @@ public class ConfigClient {
         if (!initialized.get()) {
             initialize();
         }
-        if (enablePolling && !running.get()) {
-            poller.startPolling();
+        if (!running.get()) {
+            // 启动WebSocket客户端
+            if (enableWebSocket && webSocketClient != null) {
+                webSocketClient.connect();
+                logger.info("WebSocket客户端已连接");
+            }
+            
+            // 启动轮询器
+            if (enablePolling) {
+                poller.startPolling();
+            }
+            
             running.set(true);
+            logger.info("配置客户端启动成功");
         }
     }
 
@@ -306,12 +415,24 @@ public class ConfigClient {
      */
     public void stop() {
         if (running.compareAndSet(true, false)) {
-            poller.stopPolling();
+            // 停止WebSocket客户端
+            if (enableWebSocket && webSocketClient != null) {
+                webSocketClient.disconnect();
+                logger.info("WebSocket客户端已断开");
+            }
+            
+            // 停止轮询器
+            if (enablePolling) {
+                poller.stopPolling();
+            }
+            
             try {
                 httpClient.close();
             } catch (Exception e) {
                 logger.error("关闭HTTP客户端失败", e);
             }
+            
+            logger.info("配置客户端已停止");
         }
     }
 
@@ -352,6 +473,11 @@ public class ConfigClient {
         private boolean enablePolling = true;
         private boolean enableCache = true;
         private long cacheExpireTime = 300000; // 5分钟
+        private boolean enableWebSocket = false;
+        private Long appId;
+        private String instanceId;
+        private String instanceIp;
+        private String clientVersion = "1.0.0";
 
         public ConfigClientBuilder serverUrl(String serverUrl) {
             this.serverUrl = serverUrl;
@@ -397,11 +523,41 @@ public class ConfigClient {
             this.cacheExpireTime = cacheExpireTime;
             return this;
         }
+        
+        public ConfigClientBuilder enableWebSocket(boolean enableWebSocket) {
+            this.enableWebSocket = enableWebSocket;
+            return this;
+        }
+        
+        public ConfigClientBuilder appId(Long appId) {
+            this.appId = appId;
+            return this;
+        }
+        
+        public ConfigClientBuilder instanceId(String instanceId) {
+            this.instanceId = instanceId;
+            return this;
+        }
+        
+        public ConfigClientBuilder instanceIp(String instanceIp) {
+            this.instanceIp = instanceIp;
+            return this;
+        }
+        
+        public ConfigClientBuilder clientVersion(String clientVersion) {
+            this.clientVersion = clientVersion;
+            return this;
+        }
 
         public ConfigClient build() {
             if (serverUrl == null || appCode == null || envCode == null) {
                 throw new IllegalArgumentException("serverUrl, appCode, envCode 不能为空");
             }
+            
+            if (enableWebSocket && (appId == null || instanceId == null)) {
+                throw new IllegalArgumentException("启用WebSocket时，appId和instanceId不能为空");
+            }
+            
             return new ConfigClient(this);
         }
     }

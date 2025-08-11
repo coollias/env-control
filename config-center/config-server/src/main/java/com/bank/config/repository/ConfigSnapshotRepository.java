@@ -72,4 +72,9 @@ public interface ConfigSnapshotRepository extends JpaRepository<ConfigSnapshot, 
      */
     @Query("SELECT s FROM ConfigSnapshot s WHERE s.appId = :appId AND s.envId = :envId AND s.snapshotType = 1 AND s.status = 1 ORDER BY s.createdAt DESC")
     List<ConfigSnapshot> findLatestStagedSnapshots(@Param("appId") Long appId, @Param("envId") Long envId, Pageable pageable);
+
+    /**
+     * 根据应用ID、环境ID、版本号和快照类型查找快照
+     */
+    Optional<ConfigSnapshot> findByAppIdAndEnvIdAndVersionNumberAndSnapshotType(Long appId, Long envId, String versionNumber, Integer snapshotType);
 }

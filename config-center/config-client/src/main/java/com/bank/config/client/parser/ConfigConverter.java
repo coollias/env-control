@@ -1,7 +1,6 @@
 package com.bank.config.client.parser;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 配置转换器

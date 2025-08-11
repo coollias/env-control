@@ -6,6 +6,7 @@ import com.bank.config.entity.ConfigSnapshotItem;
 import com.bank.config.repository.ConfigItemRepository;
 import com.bank.config.repository.ConfigSnapshotItemRepository;
 import com.bank.config.repository.ConfigSnapshotRepository;
+import com.bank.config.service.ConfigPushService;
 import com.bank.config.service.ConfigSnapshotService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,6 +41,9 @@ public class ConfigSnapshotServiceImpl implements ConfigSnapshotService {
 
     @Autowired
     private ObjectMapper objectMapper;
+    
+    @Autowired
+    private ConfigPushService configPushService;
 
     @Override
     @org.springframework.cache.annotation.CacheEvict(value = "snapshots", allEntries = true)
@@ -92,13 +96,29 @@ public class ConfigSnapshotServiceImpl implements ConfigSnapshotService {
         
         ConfigSnapshot snapshot = snapshotOpt.get();
         
+        // 生成发布版本号（在原版本号基础上添加发布标识）
+        String publishVersionNumber = snapshot.getVersionNumber() + "p";
+        
+        // 检查是否已经存在相同版本号的发布快照
+        Optional<ConfigSnapshot> existingPublish = configSnapshotRepository
+            .findByAppIdAndEnvIdAndVersionNumberAndSnapshotType(
+                snapshot.getAppId(), 
+                snapshot.getEnvId(), 
+                publishVersionNumber, 
+                2 // 发布类型
+            );
+        
+        if (existingPublish.isPresent()) {
+            throw new RuntimeException("版本 " + publishVersionNumber + " 已经发布过了");
+        }
+        
         // 创建发布快照
         ConfigSnapshot publishSnapshot = new ConfigSnapshot();
         publishSnapshot.setAppId(snapshot.getAppId());
         publishSnapshot.setEnvId(snapshot.getEnvId());
         publishSnapshot.setSnapshotName("发布版本: " + snapshot.getSnapshotName());
         publishSnapshot.setSnapshotDesc("发布版本: " + snapshot.getSnapshotDesc());
-        publishSnapshot.setVersionNumber(snapshot.getVersionNumber());
+        publishSnapshot.setVersionNumber(publishVersionNumber);
         publishSnapshot.setSnapshotType(2); // 发布类型
         publishSnapshot.setStatus(1);
         publishSnapshot.setConfigData(snapshot.getConfigData());
@@ -123,6 +143,34 @@ public class ConfigSnapshotServiceImpl implements ConfigSnapshotService {
             newItem.setGroupId(item.getGroupId());
             newItem.setSortOrder(item.getSortOrder());
             configSnapshotItemRepository.save(newItem);
+        }
+        
+        // 通过WebSocket推送配置更新到客户端
+        try {
+            // 解析配置数据
+            Map<String, Object> configData = objectMapper.readValue(
+                publishSnapshot.getConfigData(), 
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
+            );
+            
+            // 推送配置更新
+            configPushService.pushConfigToApp(
+                publishSnapshot.getAppId(), 
+                publishSnapshot.getEnvId(), 
+                configData
+            );
+            
+            // 推送配置变更通知
+            configPushService.pushConfigChangeNotification(
+                publishSnapshot.getAppId(), 
+                publishSnapshot.getEnvId(), 
+                publishSnapshot.getVersionNumber(), 
+                "PUBLISH"
+            );
+            
+        } catch (Exception e) {
+            // 记录错误但不影响发布流程
+            System.err.println("WebSocket推送失败: " + e.getMessage());
         }
         
         return publishSnapshot;
@@ -177,30 +225,83 @@ public class ConfigSnapshotServiceImpl implements ConfigSnapshotService {
 
     @Override
     public String generateVersionNumber(Long appId, Long envId) {
-        String latestVersion = getLatestVersionNumber(appId, envId);
+        // 使用重试机制来避免版本号冲突
+        int maxRetries = 10;
         
-        if (latestVersion == null) {
-            // 如果没有版本，从v1.0.0开始
-            return "v1.0.0";
+        for (int i = 0; i < maxRetries; i++) {
+            try {
+                String latestVersion = getLatestVersionNumber(appId, envId);
+                String newVersionNumber;
+                
+                if (latestVersion == null) {
+                    // 如果没有版本，从v1.0.0开始
+                    newVersionNumber = "v1.0.0";
+                } else if (latestVersion.matches("^v\\d{14}$")) {
+                    // 如果是时间戳格式，从v1.0.0开始
+                    newVersionNumber = "v1.0.0";
+                } else if (latestVersion.matches("^v\\d+\\.\\d+\\.\\d+p$")) {
+                    // 如果是发布版本号（如 v1.0.0p），去掉p后缀后递增
+                    try {
+                        String versionStr = latestVersion.substring(1, latestVersion.length() - 1); // 去掉v前缀和p后缀
+                        String[] parts = versionStr.split("\\.");
+                        
+                        int major = Integer.parseInt(parts[0]);
+                        int minor = Integer.parseInt(parts[1]);
+                        int patch = Integer.parseInt(parts[2]);
+                        
+                        // 递增补丁版本
+                        patch++;
+                        
+                        newVersionNumber = String.format("v%d.%d.%d", major, minor, patch);
+                    } catch (Exception e) {
+                        // 如果解析失败，从v1.0.0开始
+                        newVersionNumber = "v1.0.0";
+                    }
+                } else {
+                    try {
+                        // 解析版本号 v1.2.3
+                        String versionStr = latestVersion.substring(1); // 去掉v前缀
+                        String[] parts = versionStr.split("\\.");
+                        
+                        int major = Integer.parseInt(parts[0]);
+                        int minor = Integer.parseInt(parts[1]);
+                        int patch = Integer.parseInt(parts[2]);
+                        
+                        // 递增补丁版本
+                        patch++;
+                        
+                        newVersionNumber = String.format("v%d.%d.%d", major, minor, patch);
+                    } catch (Exception e) {
+                        // 如果版本号格式不正确，从v1.0.0开始
+                        newVersionNumber = "v1.0.0";
+                    }
+                }
+                
+                // 检查版本号是否已存在
+                if (!configSnapshotRepository.existsByAppIdAndEnvIdAndVersionNumber(appId, envId, newVersionNumber)) {
+                    return newVersionNumber;
+                }
+                
+                // 如果版本号已存在，继续重试
+                if (i < maxRetries - 1) {
+                    continue;
+                } else {
+                    // 达到最大重试次数，使用时间戳
+                    return "v" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+                }
+                
+            } catch (Exception e) {
+                if (i < maxRetries - 1) {
+                    continue;
+                } else {
+                    // 达到最大重试次数，使用时间戳
+                    return "v" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+                }
+            }
         }
         
-        try {
-            // 解析版本号 v1.2.3
-            String versionStr = latestVersion.substring(1); // 去掉v前缀
-            String[] parts = versionStr.split("\\.");
-            
-            int major = Integer.parseInt(parts[0]);
-            int minor = Integer.parseInt(parts[1]);
-            int patch = Integer.parseInt(parts[2]);
-            
-            // 递增补丁版本
-            patch++;
-            
-            return String.format("v%d.%d.%d", major, minor, patch);
-        } catch (Exception e) {
-            // 如果版本号格式不正确，使用时间戳
-            return "v" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-        }
+        // 最后的备用方案
+        return "v" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
     }
 
     @Override
