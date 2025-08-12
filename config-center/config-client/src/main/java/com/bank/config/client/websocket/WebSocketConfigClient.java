@@ -244,8 +244,8 @@ public class WebSocketConfigClient {
             registration.put("timestamp", System.currentTimeMillis());
             
             String message = objectMapper.writeValueAsString(registration);
-            // 转换为byte[]再发送
-            session.send("/app/client/register", message.getBytes(StandardCharsets.UTF_8));
+            // 直接发送字符串
+            session.send("/app/client/register", message);
             
             logger.info("客户端注册信息已发送");
             
@@ -357,8 +357,8 @@ public class WebSocketConfigClient {
                 heartbeat.put("timestamp", System.currentTimeMillis());
                 
                 String message = objectMapper.writeValueAsString(heartbeat);
-                // 转换为byte[]再发送
-                session.send("/app/client/heartbeat", message.getBytes(StandardCharsets.UTF_8));
+                // 直接发送字符串
+                session.send("/app/client/heartbeat", message);
                 
                 logger.debug("心跳已发送");
                 

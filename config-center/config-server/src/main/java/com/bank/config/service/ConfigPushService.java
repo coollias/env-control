@@ -54,4 +54,19 @@ public interface ConfigPushService {
      * 发送消息到指定的客户端实例
      */
     void sendMessageToInstances(List<String> instanceIds, String message);
+    
+    /**
+     * 注册客户端连接
+     */
+    void registerClient(String connectionId, Long appId, String instanceId, String instanceIp, String clientVersion);
+    
+    /**
+     * 更新客户端心跳时间
+     */
+    void updateClientHeartbeat(String connectionId);
+    
+    /**
+     * 移除客户端连接
+     */
+    void removeClient(String connectionId);
 }

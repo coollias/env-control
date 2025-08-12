@@ -32,7 +32,7 @@ public class WebSocketConfigClientExample {
                 .clientVersion("1.0.0")  // 客户端版本
                 .enablePolling(false)  // 禁用轮询，只使用WebSocket
                 .enableCache(true)
-                .cacheFile("config-cache.json")
+                .cacheFile("config-cache.yaml")
                 .build();
         
         // 添加配置变更监听器

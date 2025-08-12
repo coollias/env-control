@@ -11,6 +11,8 @@ import com.bank.config.client.retry.ConfigRetry;
 import com.bank.config.client.metrics.ConfigMetrics;
 import com.bank.config.client.health.ConfigHealthCheck;
 import com.bank.config.client.websocket.WebSocketConfigClient;
+import com.bank.config.client.hotupdate.ConfigHotUpdateManager;
+import com.bank.config.client.hotupdate.ConfigHotUpdateProcessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
@@ -54,6 +56,10 @@ public class ConfigClient {
     private final CloseableHttpClient httpClient;
     private final ObjectMapper objectMapper;
     
+    // 热更新相关组件
+    private final ConfigHotUpdateManager hotUpdateManager;
+    private final ConfigHotUpdateProcessor hotUpdateProcessor;
+    
     // WebSocket客户端
     private WebSocketConfigClient webSocketClient;
     private final boolean enableWebSocket;
@@ -87,6 +93,10 @@ public class ConfigClient {
         this.healthCheck = new ConfigHealthCheck(this);
         this.httpClient = HttpClients.createDefault();
         this.objectMapper = new ObjectMapper();
+        
+        // 初始化热更新组件
+        this.hotUpdateManager = new ConfigHotUpdateManager(this.cache);
+        this.hotUpdateProcessor = new ConfigHotUpdateProcessor(this.hotUpdateManager, this.cache);
 
         // 初始化拉取器
         this.poller = new ConfigPoller(this, pollInterval);
@@ -97,6 +107,19 @@ public class ConfigClient {
         this.instanceId = builder.instanceId;
         this.instanceIp = builder.instanceIp;
         this.clientVersion = builder.clientVersion;
+        
+        // 如果启用WebSocket，创建WebSocket客户端
+        if (this.enableWebSocket && this.appId != null && this.instanceId != null) {
+            this.webSocketClient = new WebSocketConfigClient(
+                this.serverUrl, 
+                this.appId, 
+                this.instanceId, 
+                this.instanceIp, 
+                this.clientVersion
+            );
+            // 设置WebSocket监听器
+            setupWebSocketListeners();
+        }
         
         if (enableWebSocket) {
             this.webSocketClient = new WebSocketConfigClient(
@@ -133,6 +156,9 @@ public class ConfigClient {
                     
                     // 通知所有监听器
                     notifyConfigRefresh(newConfigs);
+                    
+                    // 触发热更新处理
+                    triggerHotUpdate(newConfigs);
                 }
             });
             
@@ -202,6 +228,19 @@ public class ConfigClient {
                 if (enablePolling) {
                     poller.startPolling();
                     running.set(true);
+                }
+                
+                // 初始化WebSocket客户端（如果还没有初始化）
+                if (enableWebSocket && webSocketClient == null && appId != null && instanceId != null) {
+                    this.webSocketClient = new WebSocketConfigClient(
+                        this.serverUrl, 
+                        this.appId, 
+                        this.instanceId, 
+                        this.instanceIp, 
+                        this.clientVersion
+                    );
+                    // 设置WebSocket监听器
+                    setupWebSocketListeners();
                 }
 
                 logger.info("配置客户端初始化完成");
@@ -384,6 +423,22 @@ public class ConfigClient {
                 logger.error("配置刷新监听器执行失败", e);
             }
         }
+        
+        // 触发热更新处理
+        triggerHotUpdate(newConfigs);
+    }
+    
+    /**
+     * 触发热更新处理
+     */
+    private void triggerHotUpdate(Map<String, String> newConfigs) {
+        try {
+            // 这里可以添加热更新逻辑
+            // 例如：重新处理所有已绑定的对象
+            logger.debug("配置刷新，触发热更新处理，共{}个配置项", newConfigs.size());
+        } catch (Exception e) {
+            logger.error("热更新处理失败", e);
+        }
     }
 
     /**
@@ -441,6 +496,69 @@ public class ConfigClient {
      */
     public boolean isHealthy() {
         return healthCheck.isHealthy();
+    }
+    
+    // ==================== 热更新相关方法 ====================
+    
+    /**
+     * 启用对象的配置热更新
+     * 使用@ConfigValue注解标记的字段将自动更新
+     * 
+     * @param target 目标对象
+     */
+    public void enableHotUpdate(Object target) {
+        if (hotUpdateProcessor != null) {
+            hotUpdateProcessor.processObject(target);
+            logger.info("已启用对象热更新: {}", target.getClass().getSimpleName());
+        }
+    }
+    
+    /**
+     * 手动绑定配置字段到对象属性
+     * 
+     * @param configKey 配置键
+     * @param target 目标对象
+     * @param fieldName 字段名
+     */
+    public void bindConfigField(String configKey, Object target, String fieldName) {
+        if (hotUpdateManager != null) {
+            hotUpdateManager.bindConfigField(configKey, target, fieldName);
+        }
+    }
+    
+    /**
+     * 手动绑定配置到方法调用
+     * 
+     * @param configKey 配置键
+     * @param target 目标对象
+     * @param methodName 方法名
+     * @param parameterTypes 参数类型
+     */
+    public void bindConfigMethod(String configKey, Object target, String methodName, Class<?>... parameterTypes) {
+        if (hotUpdateManager != null) {
+            hotUpdateManager.bindConfigMethod(configKey, target, methodName, parameterTypes);
+        }
+    }
+    
+    /**
+     * 获取热更新管理器
+     */
+    public ConfigHotUpdateManager getHotUpdateManager() {
+        return hotUpdateManager;
+    }
+    
+    /**
+     * 获取热更新处理器
+     */
+    public ConfigHotUpdateProcessor getHotUpdateProcessor() {
+        return hotUpdateProcessor;
+    }
+    
+    /**
+     * 获取WebSocket客户端
+     */
+    public WebSocketConfigClient getWebSocketClient() {
+        return webSocketClient;
     }
 
 

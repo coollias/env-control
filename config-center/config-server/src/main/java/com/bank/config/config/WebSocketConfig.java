@@ -8,6 +8,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 
 /**
  * WebSocket配置类
+ * 启用WebSocket消息代理和配置消息路由
  * 
  * @author bank
  */
@@ -16,23 +17,22 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
-    public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // 注册STOMP端点，客户端通过这个端点进行连接
-        registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*") // 允许跨域
-                .withSockJS(); // 启用SockJS支持
+    public void configureMessageBroker(MessageBrokerRegistry config) {
+        // 启用简单的消息代理，用于向客户端发送消息
+        config.enableSimpleBroker("/topic", "/queue");
+        
+        // 设置应用程序前缀，用于客户端发送消息到服务器
+        config.setApplicationDestinationPrefixes("/app");
+        
+        // 设置用户目标前缀，用于向特定用户发送消息
+        config.setUserDestinationPrefix("/user");
     }
 
     @Override
-    public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // 配置消息代理
-        // 客户端订阅消息的前缀
-        registry.enableSimpleBroker("/topic", "/queue");
-        
-        // 客户端发送消息的前缀
-        registry.setApplicationDestinationPrefixes("/app");
-        
-        // 点对点消息的前缀
-        registry.setUserDestinationPrefix("/user");
+    public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // 注册STOMP端点，客户端通过这个端点连接WebSocket
+        registry.addEndpoint("/ws")
+                .setAllowedOriginPatterns("*")  // 允许所有来源
+                .withSockJS();  // 启用SockJS支持
     }
 }

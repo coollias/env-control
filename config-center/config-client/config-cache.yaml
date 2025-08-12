@@ -1,0 +1,17 @@
+---
+configs:
+  database:
+    pool:
+      minConnections: "8"
+      timeout: "30001"
+    url: "jdbc:mysql://localhost:3306/myappgyk"
+    username: "root111"
+  java:
+    version: "1.733"
+  redis:
+    database: "0"
+    password: ""
+    port: "6379"
+    host: "localhost"
+    timeout: "2000"
+lastUpdateTime: "2025-08-12T09:30:07.366"
